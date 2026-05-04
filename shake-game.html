@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Shake Game</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: #1a1a2e;
+      font-family: 'Segoe UI', sans-serif;
+      color: #fff;
+      overflow: hidden;
+    }
+
+    h1 {
+      font-size: 2.5rem;
+      margin-bottom: 0.3rem;
+      letter-spacing: 2px;
+      text-shadow: 0 0 20px #e94560;
+    }
+
+    .subtitle {
+      font-size: 1rem;
+      color: #aaa;
+      margin-bottom: 2rem;
+    }
+
+    .game-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2rem;
+    }
+
+    /* Shake object */
+    .shake-object {
+      width: 140px;
+      height: 140px;
+      background: linear-gradient(135deg, #e94560, #f5a623);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 4rem;
+      cursor: pointer;
+      user-select: none;
+      box-shadow: 0 0 40px rgba(233, 69, 96, 0.5);
+      transition: transform 0.05s ease, box-shadow 0.1s ease;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .shake-object.shaking {
+      animation: shake-anim 0.1s infinite;
+      box-shadow: 0 0 60px rgba(233, 69, 96, 0.9);
+    }
+
+    .shake-object.explode {
+      animation: explode-anim 0.5s forwards;
+    }
+
+    @keyframes shake-anim {
+      0%   { transform: translate(-6px, -4px) rotate(-3deg); }
+      25%  { transform: translate(6px, 4px) rotate(3deg); }
+      50%  { transform: translate(-4px, 6px) rotate(-2deg); }
+      75%  { transform: translate(4px, -6px) rotate(2deg); }
+      100% { transform: translate(-6px, -4px) rotate(-3deg); }
+    }
+
+    @keyframes explode-anim {
+      0%   { transform: scale(1); opacity: 1; }
+      50%  { transform: scale(1.8); opacity: 0.7; }
+      100% { transform: scale(0); opacity: 0; }
+    }
+
+    /* Power meter */
+    .meter-wrap {
+      width: 280px;
+    }
+
+    .meter-label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.85rem;
+      color: #ccc;
+      margin-bottom: 6px;
+    }
+
+    .meter-bar {
+      height: 22px;
+      background: #2a2a4a;
+      border-radius: 11px;
+      overflow: hidden;
+      border: 2px solid #333;
+    }
+
+    .meter-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #4facfe, #00f2fe, #f5a623, #e94560);
+      background-size: 300% 100%;
+      border-radius: 11px;
+      transition: width 0.05s linear;
+      animation: gradient-move 2s linear infinite;
+    }
+
+    @keyframes gradient-move {
+      0%   { background-position: 0% 50%; }
+      100% { background-position: 300% 50%; }
+    }
+
+    /* Scores */
+    .scores {
+      display: flex;
+      gap: 3rem;
+      text-align: center;
+    }
+
+    .score-block .label {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: #888;
+    }
+
+    .score-block .value {
+      font-size: 2rem;
+      font-weight: bold;
+      color: #f5a623;
+    }
+
+    /* Timer */
+    .timer-ring {
+      position: relative;
+      width: 80px;
+      height: 80px;
+    }
+
+    .timer-ring svg {
+      transform: rotate(-90deg);
+    }
+
+    .timer-ring .bg { stroke: #2a2a4a; }
+    .timer-ring .fg {
+      stroke: #e94560;
+      stroke-dasharray: 220;
+      stroke-dashoffset: 0;
+      transition: stroke-dashoffset 0.1s linear;
+    }
+
+    .timer-text {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.4rem;
+      font-weight: bold;
+    }
+
+    /* Message overlay */
+    .message {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0,0,0,0.85);
+      z-index: 10;
+      gap: 1rem;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s;
+    }
+
+    .message.visible {
+      opacity: 1;
+      pointer-events: all;
+    }
+
+    .message h2 {
+      font-size: 3rem;
+      text-shadow: 0 0 30px currentColor;
+    }
+
+    .message p {
+      font-size: 1.2rem;
+      color: #ccc;
+    }
+
+    .btn {
+      margin-top: 1rem;
+      padding: 0.8rem 2.5rem;
+      font-size: 1.1rem;
+      font-weight: bold;
+      border: none;
+      border-radius: 30px;
+      background: linear-gradient(135deg, #e94560, #f5a623);
+      color: #fff;
+      cursor: pointer;
+      letter-spacing: 1px;
+      transition: transform 0.1s, box-shadow 0.1s;
+      box-shadow: 0 4px 20px rgba(233,69,96,0.4);
+    }
+
+    .btn:hover { transform: scale(1.05); }
+    .btn:active { transform: scale(0.97); }
+
+    /* Particles */
+    .particle {
+      position: fixed;
+      pointer-events: none;
+      font-size: 1.5rem;
+      animation: particle-fly 1s ease-out forwards;
+      z-index: 20;
+    }
+
+    @keyframes particle-fly {
+      0%   { transform: translate(0,0) scale(1); opacity: 1; }
+      100% { transform: translate(var(--tx), var(--ty)) scale(0.2); opacity: 0; }
+    }
+
+    .hint {
+      font-size: 0.85rem;
+      color: #666;
+      text-align: center;
+      margin-top: -1rem;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>SHAKE!</h1>
+  <p class="subtitle">¡Agita para ganar puntos!</p>
+
+  <div class="game-container">
+
+    <div class="scores">
+      <div class="score-block">
+        <div class="label">Puntos</div>
+        <div class="value" id="score">0</div>
+      </div>
+      <div class="timer-ring">
+        <svg width="80" height="80" viewBox="0 0 80 80">
+          <circle class="bg" cx="40" cy="40" r="35" fill="none" stroke-width="7"/>
+          <circle class="fg" id="timer-arc" cx="40" cy="40" r="35" fill="none" stroke-width="7" stroke-linecap="round"/>
+        </svg>
+        <div class="timer-text" id="timer-text">10</div>
+      </div>
+      <div class="score-block">
+        <div class="label">Mejor</div>
+        <div class="value" id="best">0</div>
+      </div>
+    </div>
+
+    <div class="shake-object" id="ball">🎲</div>
+
+    <div class="meter-wrap">
+      <div class="meter-label">
+        <span>Energía</span>
+        <span id="power-pct">0%</span>
+      </div>
+      <div class="meter-bar">
+        <div class="meter-fill" id="meter"></div>
+      </div>
+    </div>
+
+    <p class="hint">
+      📱 Agita el dispositivo &nbsp;|&nbsp; 🖱️ Haz clic rápido &nbsp;|&nbsp; ⌨️ Presiona ESPACIO
+    </p>
+
+  </div>
+
+  <!-- End screen -->
+  <div class="message" id="end-screen">
+    <h2 id="end-emoji">🎉</h2>
+    <h2 id="end-title" style="color:#f5a623">¡Tiempo!</h2>
+    <p id="end-msg">Puntuación: <strong id="end-score">0</strong></p>
+    <button class="btn" onclick="startGame()">Jugar de nuevo</button>
+  </div>
+
+  <script>
+    const GAME_DURATION = 10; // seconds
+    const POWER_DECAY = 0.6;  // % per frame when not shaking
+    const POWER_PER_SHAKE = 4;
+    const SCORE_PER_FULL = 10;
+
+    let score = 0;
+    let best = parseInt(localStorage.getItem('shake-best') || '0');
+    let power = 0;
+    let timeLeft = GAME_DURATION;
+    let gameActive = false;
+    let timerInterval = null;
+    let animFrame = null;
+    let lastShakeTime = 0;
+    let isPressingDown = false;
+
+    const ball = document.getElementById('ball');
+    const meterEl = document.getElementById('meter');
+    const powerPct = document.getElementById('power-pct');
+    const scoreEl = document.getElementById('score');
+    const bestEl = document.getElementById('best');
+    const timerText = document.getElementById('timer-text');
+    const timerArc = document.getElementById('timer-arc');
+    const endScreen = document.getElementById('end-screen');
+    const endScore = document.getElementById('end-score');
+    const endMsg = document.getElementById('end-msg');
+    const endEmoji = document.getElementById('end-emoji');
+    const endTitle = document.getElementById('end-title');
+
+    const circumference = 2 * Math.PI * 35; // ≈ 220
+
+    bestEl.textContent = best;
+
+    function startGame() {
+      score = 0;
+      power = 0;
+      timeLeft = GAME_DURATION;
+      gameActive = true;
+      endScreen.classList.remove('visible');
+      ball.classList.remove('explode');
+      ball.style.opacity = 1;
+      scoreEl.textContent = 0;
+      updateMeter();
+      updateTimer();
+
+      clearInterval(timerInterval);
+      timerInterval = setInterval(() => {
+        if (!gameActive) return;
+        timeLeft -= 0.1;
+        if (timeLeft <= 0) {
+          timeLeft = 0;
+          endGame();
+        }
+        updateTimer();
+      }, 100);
+
+      requestAnimationFrame(gameLoop);
+
+      // Request accelerometer on first start (mobile)
+      if (typeof DeviceMotionEvent !== 'undefined' &&
+          typeof DeviceMotionEvent.requestPermission === 'function') {
+        DeviceMotionEvent.requestPermission().catch(() => {});
+      }
+    }
+
+    function gameLoop() {
+      if (!gameActive) return;
+
+      // Decay power
+      power = Math.max(0, power - POWER_DECAY);
+
+      // Score when power reaches 100
+      if (power >= 100) {
+        power = 0;
+        score += SCORE_PER_FULL;
+        scoreEl.textContent = score;
+        spawnParticles();
+        pulseBall();
+      }
+
+      // Visual shake when power > 20
+      if (power > 20) {
+        ball.classList.add('shaking');
+      } else {
+        ball.classList.remove('shaking');
+      }
+
+      updateMeter();
+      animFrame = requestAnimationFrame(gameLoop);
+    }
+
+    function addShakeForce(amount) {
+      if (!gameActive) {
+        startGame();
+        return;
+      }
+      power = Math.min(100, power + amount);
+    }
+
+    function updateMeter() {
+      const pct = Math.round(power);
+      meterEl.style.width = pct + '%';
+      powerPct.textContent = pct + '%';
+    }
+
+    function updateTimer() {
+      const ratio = timeLeft / GAME_DURATION;
+      const offset = circumference * (1 - ratio);
+      timerArc.style.strokeDashoffset = offset;
+      timerText.textContent = Math.ceil(timeLeft);
+
+      // Color warning
+      if (timeLeft <= 3) {
+        timerArc.style.stroke = '#e94560';
+      } else if (timeLeft <= 5) {
+        timerArc.style.stroke = '#f5a623';
+      } else {
+        timerArc.style.stroke = '#4facfe';
+      }
+    }
+
+    function endGame() {
+      gameActive = false;
+      ball.classList.remove('shaking');
+      cancelAnimationFrame(animFrame);
+      clearInterval(timerInterval);
+
+      if (score > best) {
+        best = score;
+        localStorage.setItem('shake-best', best);
+        bestEl.textContent = best;
+      }
+
+      endScore.textContent = score;
+
+      if (score >= 100) {
+        endEmoji.textContent = '🏆';
+        endTitle.textContent = '¡Leyenda!';
+        endMsg.innerHTML = `Puntuación: <strong>${score}</strong> — ¡Increíble!`;
+      } else if (score >= 50) {
+        endEmoji.textContent = '🔥';
+        endTitle.textContent = '¡Excelente!';
+        endMsg.innerHTML = `Puntuación: <strong>${score}</strong> — ¡Muy bien!`;
+      } else if (score >= 20) {
+        endEmoji.textContent = '👍';
+        endTitle.textContent = '¡Bien!';
+        endMsg.innerHTML = `Puntuación: <strong>${score}</strong> — ¡Sigue practicando!`;
+      } else {
+        endEmoji.textContent = '😅';
+        endTitle.textContent = '¡Tiempo!';
+        endMsg.innerHTML = `Puntuación: <strong>${score}</strong> — ¡Inténtalo de nuevo!`;
+      }
+
+      endScreen.classList.add('visible');
+    }
+
+    function pulseBall() {
+      ball.style.transform = 'scale(1.3)';
+      setTimeout(() => { ball.style.transform = ''; }, 150);
+    }
+
+    function spawnParticles() {
+      const emojis = ['⭐','✨','💫','🎉','🎊','💥'];
+      const rect = ball.getBoundingClientRect();
+      const cx = rect.left + rect.width / 2;
+      const cy = rect.top + rect.height / 2;
+
+      for (let i = 0; i < 8; i++) {
+        const p = document.createElement('div');
+        p.className = 'particle';
+        p.textContent = emojis[Math.floor(Math.random() * emojis.length)];
+        const angle = (Math.PI * 2 * i) / 8;
+        const dist = 80 + Math.random() * 60;
+        p.style.left = cx + 'px';
+        p.style.top = cy + 'px';
+        p.style.setProperty('--tx', Math.cos(angle) * dist + 'px');
+        p.style.setProperty('--ty', Math.sin(angle) * dist + 'px');
+        document.body.appendChild(p);
+        setTimeout(() => p.remove(), 1000);
+      }
+    }
+
+    // --- Input: click / touch ---
+    ball.addEventListener('pointerdown', () => {
+      isPressingDown = true;
+      addShakeForce(POWER_PER_SHAKE * 2);
+    });
+    document.addEventListener('pointerup', () => { isPressingDown = false; });
+
+    // Rapid clicks boost power
+    ball.addEventListener('click', () => addShakeForce(POWER_PER_SHAKE));
+
+    // --- Input: keyboard (spacebar) ---
+    document.addEventListener('keydown', (e) => {
+      if (e.code === 'Space' && !e.repeat) {
+        e.preventDefault();
+        addShakeForce(POWER_PER_SHAKE * 2.5);
+      }
+    });
+
+    // --- Input: accelerometer (mobile) ---
+    let lastAcc = { x: 0, y: 0, z: 0 };
+    window.addEventListener('devicemotion', (e) => {
+      const acc = e.accelerationIncludingGravity;
+      if (!acc) return;
+      const dx = Math.abs((acc.x || 0) - lastAcc.x);
+      const dy = Math.abs((acc.y || 0) - lastAcc.y);
+      const dz = Math.abs((acc.z || 0) - lastAcc.z);
+      const delta = dx + dy + dz;
+      if (delta > 15) {
+        addShakeForce(delta * 0.4);
+      }
+      lastAcc = { x: acc.x || 0, y: acc.y || 0, z: acc.z || 0 };
+    });
+
+    // Show start screen initially
+    endScreen.classList.add('visible');
+    endEmoji.textContent = '🎲';
+    endTitle.textContent = '¡SHAKE!';
+    endMsg.innerHTML = 'Agita, haz clic o presiona <strong>ESPACIO</strong>';
+    document.querySelector('#end-screen .btn').textContent = '¡Empezar!';
+  </script>
+</body>
+</html>
