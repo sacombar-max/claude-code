@@ -163,19 +163,14 @@ function importarDesdeHoja() {
     return;
   }
 
-  const txSheet = getSheet('TX');
-  let importados = 0;
+  const filas = [];
   let errores = 0;
   const errDetail = [];
 
-  // Empieza en fila 2 (índice 1) para saltar el encabezado
   for (let i = 1; i < data.length; i++) {
     const [mes, tipo, descripcion, categoria, monto, tipo_gasto] = data[i];
+    if (!mes && !descripcion && !monto) continue; // fila vacía
 
-    // Saltar filas vacías
-    if (!mes && !descripcion && !monto) continue;
-
-    // Validaciones básicas
     const mesStr   = String(mes).trim();
     const tipoStr  = String(tipo).trim().toLowerCase();
     const descStr  = String(descripcion).trim();
@@ -184,10 +179,10 @@ function importarDesdeHoja() {
     const tgStr    = String(tipo_gasto || '').trim().toUpperCase();
 
     if (!/^\d{4}-\d{2}$/.test(mesStr)) {
-      errores++; errDetail.push(`Fila ${i+1}: mes inválido "${mes}" (usa formato YYYY-MM)`); continue;
+      errores++; errDetail.push(`Fila ${i+1}: mes inválido "${mes}" — usa formato YYYY-MM`); continue;
     }
     if (!['ingreso','egreso'].includes(tipoStr)) {
-      errores++; errDetail.push(`Fila ${i+1}: tipo inválido "${tipo}" (usa "ingreso" o "egreso")`); continue;
+      errores++; errDetail.push(`Fila ${i+1}: tipo inválido "${tipo}" — usa "ingreso" o "egreso"`); continue;
     }
     if (!descStr) {
       errores++; errDetail.push(`Fila ${i+1}: descripción vacía`); continue;
@@ -196,13 +191,17 @@ function importarDesdeHoja() {
       errores++; errDetail.push(`Fila ${i+1}: monto inválido "${monto}"`); continue;
     }
 
-    const id    = Utilities.getUuid();
-    const fecha = mesStr + '-01';
-    txSheet.appendRow([id, fecha, tipoStr, descStr, catStr, montoNum, tgStr]);
-    importados++;
+    filas.push([Utilities.getUuid(), mesStr + '-01', tipoStr, descStr, catStr, montoNum, tgStr]);
   }
 
-  let msg = `✅ ${importados} registro(s) importados correctamente.`;
+  // Escribe todas las filas de una sola vez (mucho más rápido que appendRow en bucle)
+  if (filas.length > 0) {
+    const txSheet = getSheet('TX');
+    const lastRow = txSheet.getLastRow();
+    txSheet.getRange(lastRow + 1, 1, filas.length, 7).setValues(filas);
+  }
+
+  let msg = `✅ ${filas.length} registro(s) importados correctamente.`;
   if (errores > 0) msg += `\n\n⚠️ ${errores} fila(s) con errores:\n` + errDetail.slice(0, 10).join('\n');
   SpreadsheetApp.getUi().alert(msg);
 }
