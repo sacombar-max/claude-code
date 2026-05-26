@@ -156,6 +156,12 @@
       border-radius: 11px; color: #4338CA; font-size: 13.5px; font-weight: 600;
       cursor: pointer; margin-bottom: 10px;
     }
+    /* ── Budget comparison ── */
+    .bud-summary-bar { height: 12px; background: var(--border); border-radius: 6px; overflow: hidden; margin: 10px 0 14px; }
+    .bud-compare { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
+    .bud-col { text-align: center; }
+    .bud-col-label { font-size: 10.5px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .4px; margin-bottom: 2px; }
+    .bud-col-val { font-size: 13.5px; font-weight: 700; }
 
     /* ── Tendencias ── */
     .chart-wrap { position: relative; height: 210px; }
@@ -294,6 +300,7 @@
 
   <!-- ══ PRESUPUESTO ══ -->
   <div id="view-presupuesto" class="view">
+    <div id="bud-summary"></div>
     <button class="btn-copy" id="btn-copy-prev" onclick="copiarPrev()">↩ Copiar presupuesto del mes anterior</button>
     <div class="card">
       <div id="bud-list"></div>
@@ -701,31 +708,88 @@ function renderBudget() {
     byCat[t.categoria] = (byCat[t.categoria]||0) + Number(t.monto);
   });
 
-  const el = document.getElementById('bud-list');
+  const el    = document.getElementById('bud-list');
+  const sumEl = document.getElementById('bud-summary');
   document.getElementById('btn-copy-prev').style.display = S.budget.length ? 'none' : '';
 
+  // ── Tarjeta comparativo total ──
+  if (S.budget.length) {
+    const totalBud  = S.budget.reduce((s, b) => s + Number(b.monto), 0);
+    const totalEjec = S.budget.reduce((s, b) => s + (byCat[b.categoria]||0), 0);
+    const totalDisp = totalBud - totalEjec;
+    const totalPct  = totalBud > 0 ? (totalEjec / totalBud) * 100 : 0;
+    const sumFc     = totalPct >= 100 ? 'f-danger' : totalPct >= 80 ? 'f-warn' : 'f-safe';
+    const dispColor = totalDisp >= 0 ? 'var(--income)' : 'var(--expense)';
+    const dispLabel = totalDisp >= 0 ? 'Disponible' : 'Excedido';
+
+    sumEl.innerHTML = `
+      <div class="card" style="margin-bottom:12px">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <span style="font-weight:700;font-size:15px">Comparativo del Mes</span>
+          <span style="font-size:13px;font-weight:600;color:${totalPct>=100?'var(--expense)':totalPct>=80?'#D97706':'var(--muted)'}">${Math.round(totalPct)}% ejecutado</span>
+        </div>
+        <div class="bud-summary-bar">
+          <div class="prog-fill ${sumFc}" style="width:${Math.min(totalPct,100).toFixed(1)}%"></div>
+        </div>
+        <div class="bud-compare" style="padding-top:0;border-top:none">
+          <div class="bud-col" style="background:#F9FAFB;border-radius:10px;padding:10px 4px">
+            <div class="bud-col-label">Presupuestado</div>
+            <div class="bud-col-val">${cop(totalBud)}</div>
+          </div>
+          <div class="bud-col" style="background:#FEF2F2;border-radius:10px;padding:10px 4px">
+            <div class="bud-col-label">Ejecutado</div>
+            <div class="bud-col-val" style="color:var(--expense)">${cop(totalEjec)}</div>
+          </div>
+          <div class="bud-col" style="background:${totalDisp>=0?'#F0FDF4':'#FEF2F2'};border-radius:10px;padding:10px 4px">
+            <div class="bud-col-label">${dispLabel}</div>
+            <div class="bud-col-val" style="color:${dispColor}">${cop(Math.abs(totalDisp))}</div>
+          </div>
+        </div>
+      </div>`;
+  } else {
+    sumEl.innerHTML = '';
+  }
+
+  // ── Lista por categoría ──
   if (!S.budget.length) {
     el.innerHTML = '<div class="empty" style="padding:20px"><div class="empty-icon">💰</div>Sin presupuesto configurado</div>';
   } else {
     el.innerHTML = S.budget.map(b => {
-      const ejec = byCat[b.categoria]||0;
-      const bud  = Number(b.monto);
-      const pct  = bud > 0 ? (ejec/bud)*100 : 0;
-      const fc   = pct >= 100 ? 'f-danger' : pct >= 80 ? 'f-warn' : pct >= 60 ? 'f-mid' : 'f-safe';
-      const amtColor = pct >= 100 ? 'var(--expense)' : pct >= 80 ? '#D97706' : 'var(--muted)';
-      const icon = pct >= 100 ? '🚨 ' : pct >= 80 ? '⚠️ ' : '';
-      const key  = b.categoria.replace(/[\s&]/g,'_');
+      const ejec  = byCat[b.categoria]||0;
+      const bud   = Number(b.monto);
+      const disp  = bud - ejec;
+      const pct   = bud > 0 ? (ejec/bud)*100 : 0;
+      const fc    = pct >= 100 ? 'f-danger' : pct >= 80 ? 'f-warn' : pct >= 60 ? 'f-mid' : 'f-safe';
+      const icon  = pct >= 100 ? '🚨 ' : pct >= 80 ? '⚠️ ' : '';
+      const key   = b.categoria.replace(/[\s&]/g,'_');
+      const dispColor = disp >= 0 ? 'var(--income)' : 'var(--expense)';
+      const dispLabel = disp >= 0 ? 'Disponible' : 'Excedido';
+
       return `
         <div class="prog-item">
           <div class="prog-row">
             <span class="prog-cat">${icon}${b.categoria}</span>
-            <span class="prog-amounts" style="color:${amtColor}">${cop(ejec)} / ${cop(bud)} (${Math.round(pct)}%)</span>
+            <span style="font-size:12px;font-weight:600;color:${pct>=100?'var(--expense)':pct>=80?'#D97706':'var(--muted)'}">${Math.round(pct)}%</span>
           </div>
           <div class="prog-track">
             <div class="prog-fill ${fc}" style="width:${Math.min(pct,100).toFixed(1)}%"></div>
           </div>
+          <div class="bud-compare">
+            <div class="bud-col">
+              <div class="bud-col-label">Presupuesto</div>
+              <div class="bud-col-val">${cop(bud)}</div>
+            </div>
+            <div class="bud-col">
+              <div class="bud-col-label">Ejecutado</div>
+              <div class="bud-col-val" style="color:var(--expense)">${cop(ejec)}</div>
+            </div>
+            <div class="bud-col">
+              <div class="bud-col-label">${dispLabel}</div>
+              <div class="bud-col-val" style="color:${dispColor}">${cop(Math.abs(disp))}</div>
+            </div>
+          </div>
           <div class="bud-row">
-            <input type="number" id="be-${key}" placeholder="Actualizar monto" inputmode="numeric">
+            <input type="number" id="be-${key}" placeholder="Actualizar presupuesto" inputmode="numeric">
             <button class="btn-save" onclick="updateBud('${b.categoria}')">Guardar</button>
             <button class="btn-del"  onclick="deleteBud('${b.categoria}')">×</button>
           </div>
