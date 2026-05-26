@@ -145,3 +145,64 @@ function deleteMeDeben(id) {
   }
   return { success: false };
 }
+
+// ---- Importación masiva desde hoja "Importar" ----
+// Columnas esperadas: mes (YYYY-MM) | tipo | descripcion | categoria | monto | tipo_gasto
+
+function importarDesdeHoja() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const importSheet = ss.getSheetByName('Importar');
+  if (!importSheet) {
+    SpreadsheetApp.getUi().alert('No encontré una hoja llamada "Importar".\nCréala y llena los datos según la plantilla.');
+    return;
+  }
+
+  const data = importSheet.getDataRange().getValues();
+  if (data.length < 2) {
+    SpreadsheetApp.getUi().alert('La hoja "Importar" está vacía o solo tiene encabezados.');
+    return;
+  }
+
+  const txSheet = getSheet('TX');
+  let importados = 0;
+  let errores = 0;
+  const errDetail = [];
+
+  // Empieza en fila 2 (índice 1) para saltar el encabezado
+  for (let i = 1; i < data.length; i++) {
+    const [mes, tipo, descripcion, categoria, monto, tipo_gasto] = data[i];
+
+    // Saltar filas vacías
+    if (!mes && !descripcion && !monto) continue;
+
+    // Validaciones básicas
+    const mesStr   = String(mes).trim();
+    const tipoStr  = String(tipo).trim().toLowerCase();
+    const descStr  = String(descripcion).trim();
+    const catStr   = String(categoria).trim();
+    const montoNum = Number(String(monto).replace(/[^0-9.]/g, ''));
+    const tgStr    = String(tipo_gasto || '').trim().toUpperCase();
+
+    if (!/^\d{4}-\d{2}$/.test(mesStr)) {
+      errores++; errDetail.push(`Fila ${i+1}: mes inválido "${mes}" (usa formato YYYY-MM)`); continue;
+    }
+    if (!['ingreso','egreso'].includes(tipoStr)) {
+      errores++; errDetail.push(`Fila ${i+1}: tipo inválido "${tipo}" (usa "ingreso" o "egreso")`); continue;
+    }
+    if (!descStr) {
+      errores++; errDetail.push(`Fila ${i+1}: descripción vacía`); continue;
+    }
+    if (isNaN(montoNum) || montoNum <= 0) {
+      errores++; errDetail.push(`Fila ${i+1}: monto inválido "${monto}"`); continue;
+    }
+
+    const id    = Utilities.getUuid();
+    const fecha = mesStr + '-01';
+    txSheet.appendRow([id, fecha, tipoStr, descStr, catStr, montoNum, tgStr]);
+    importados++;
+  }
+
+  let msg = `✅ ${importados} registro(s) importados correctamente.`;
+  if (errores > 0) msg += `\n\n⚠️ ${errores} fila(s) con errores:\n` + errDetail.slice(0, 10).join('\n');
+  SpreadsheetApp.getUi().alert(msg);
+}
