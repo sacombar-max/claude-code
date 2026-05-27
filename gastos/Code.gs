@@ -150,11 +150,12 @@ function deleteMeDeben(id) {
 
 function testConexion() {
   try {
-    const resultado = setPresupuesto('2026-01', 'TEST-categoria', 1);
+    setPresupuesto('2026-01', 'TEST-categoria', 1);
     deletePresupuesto('2026-01', 'TEST-categoria');
-    SpreadsheetApp.getUi().alert('✅ Todo funciona correctamente. La conexión con la hoja está bien.');
+    Logger.log('✅ Escritura en Presupuesto: OK');
   } catch(e) {
-    SpreadsheetApp.getUi().alert('❌ Error:\n' + e.message + '\n\nRevisa los permisos de la hoja.');
+    Logger.log('❌ Error: ' + e.message);
+    throw e;
   }
 }
 
