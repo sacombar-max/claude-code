@@ -242,6 +242,8 @@
     <div id="r-alerts"></div>
     <div class="sec">Por Categoría</div>
     <div class="card"><div id="r-cats"></div></div>
+    <div class="sec">Por Cuenta</div>
+    <div id="r-cuentas"></div>
     <div class="sec">Me Deben (Pendiente)</div>
     <div id="r-medeben"></div>
   </div>
@@ -277,6 +279,10 @@
         <label>Persona</label>
         <input type="text" id="f-persona" placeholder="¿Quién te debe?">
       </div>
+      <div class="form-group" id="f-cuenta-g">
+        <label>Cuenta</label>
+        <div class="toggle-row" id="cuenta-toggles"></div>
+      </div>
       <div class="form-group">
         <label>Fecha</label>
         <input type="date" id="f-fecha">
@@ -293,6 +299,9 @@
       <button class="chip" onclick="setFiltro('egreso')">Egresos</button>
       <button class="chip" onclick="setFiltro('F')">Fijos</button>
       <button class="chip" onclick="setFiltro('V')">Variables</button>
+      <button class="chip" onclick="setFiltro('Ahorros')">Ahorros</button>
+      <button class="chip" onclick="setFiltro('Efectivo')">Efectivo</button>
+      <button class="chip" onclick="setFiltro('AFC')">AFC</button>
       <button class="chip" onclick="setFiltro('medeben')">Me Deben</button>
     </div>
     <div id="tx-list"></div>
@@ -393,6 +402,7 @@ const CATS_EGRESO = [
   'Deuda','Regalos a otros','Donaciones','Otro'
 ];
 const CATS_INGRESO = ['Salario','Saldo mes anterior','Freelance','Otro ingreso'];
+const CUENTAS = ['Cuenta de Ahorros','Efectivo','AFC'];
 const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 const MESES_CORTOS = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
 
@@ -410,6 +420,7 @@ const S = {
   trends:  [],
   rtype:   'egreso',
   tgasto:  'F',
+  cuenta:  'Cuenta de Ahorros',
   filtro:  'todos',
   chart:   null
 };
@@ -546,6 +557,31 @@ function renderResumen() {
   }
 
   // Me deben
+  // Por cuenta
+  const cuentaEl = document.getElementById('r-cuentas');
+  const txsConCuenta = S.txs.filter(t => t.cuenta);
+  if (!txsConCuenta.length) {
+    cuentaEl.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:2px 0">Sin datos por cuenta aún</div>';
+  } else {
+    const byCuenta = {};
+    S.txs.forEach(t => {
+      if (!t.cuenta) return;
+      if (!byCuenta[t.cuenta]) byCuenta[t.cuenta] = { ing: 0, egr: 0 };
+      if (t.tipo === 'ingreso') byCuenta[t.cuenta].ing += Number(t.monto);
+      if (t.tipo === 'egreso')  byCuenta[t.cuenta].egr += Number(t.monto);
+    });
+    cuentaEl.innerHTML = `<div class="grid2">` +
+      Object.entries(byCuenta).map(([cuenta, v]) => {
+        const bal = v.ing - v.egr;
+        return `<div class="card" style="margin-bottom:0">
+          <div class="card-label">${cuenta}</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:4px">Ingresos: <span style="color:var(--income)">${cop(v.ing)}</span></div>
+          <div style="font-size:11px;color:var(--muted)">Egresos: <span style="color:var(--expense)">${cop(v.egr)}</span></div>
+          <div style="font-weight:700;font-size:15px;margin-top:5px;color:${bal>=0?'var(--income)':'var(--expense)'}">${cop(bal)}</div>
+        </div>`;
+      }).join('') + `</div>`;
+  }
+
   const pend = S.medeben.filter(m => m.estado === 'pendiente');
   const mdEl = document.getElementById('r-medeben');
   if (!pend.length) {
@@ -587,8 +623,16 @@ function setType(t) {
   document.getElementById('f-tipo-g').style.display    = t === 'egreso'  ? '' : 'none';
   document.getElementById('f-persona-g').style.display = t === 'medeben' ? '' : 'none';
   document.getElementById('f-cat-g').style.display     = t === 'medeben' ? 'none' : '';
+  document.getElementById('f-cuenta-g').style.display  = t === 'medeben' ? 'none' : '';
   const sel = document.getElementById('f-cat');
   sel.innerHTML = (t === 'ingreso' ? CATS_INGRESO : CATS_EGRESO).map(c => `<option>${c}</option>`).join('');
+}
+
+function setCuenta(c) {
+  S.cuenta = c;
+  document.querySelectorAll('#cuenta-toggles .tog').forEach(b =>
+    b.classList.toggle('active', b.dataset.cuenta === c)
+  );
 }
 
 function setTipo(v) {
@@ -616,7 +660,8 @@ async function registrar() {
         descripcion: desc,
         categoria: document.getElementById('f-cat').value,
         monto: Number(monto),
-        tipo_gasto: S.rtype === 'egreso' ? S.tgasto : ''
+        tipo_gasto: S.rtype === 'egreso' ? S.tgasto : '',
+        cuenta: S.cuenta
       });
     }
     document.getElementById('f-monto').value = '';
@@ -644,7 +689,9 @@ function renderTxs() {
     items = S.medeben.map(m => ({ ...m, tipo: 'medeben', categoria: 'Me Deben', tipo_gasto: '' }));
   } else {
     items = [...S.txs];
+    const cuentaFiltros = ['Ahorros','Efectivo','AFC'];
     if (S.filtro === 'F' || S.filtro === 'V') items = items.filter(t => t.tipo_gasto === S.filtro);
+    else if (cuentaFiltros.includes(S.filtro)) items = items.filter(t => t.cuenta && t.cuenta.includes(S.filtro));
     else if (S.filtro !== 'todos') items = items.filter(t => t.tipo === S.filtro);
   }
   items.sort((a,b) => String(b.fecha).localeCompare(String(a.fecha)));
@@ -660,9 +707,10 @@ function renderTxs() {
     const dotCls = isMd ? 'dot-md' : (isIn ? 'dot-in' : 'dot-out');
     const amtStyle = isMd ? 'color:var(--purple)' : (isIn ? 'color:var(--income)' : 'color:var(--expense)');
     const sign = isIn ? '+' : (isMd ? '' : '-');
+    const cuentaTag = t.cuenta ? ` · ${t.cuenta}` : '';
     const meta = isMd
       ? `${t.fecha} · ${t.estado === 'pendiente' ? '⏳ Pendiente' : '✓ Cobrado'}`
-      : `${t.categoria}${t.tipo_gasto ? ` · ${t.tipo_gasto==='F'?'Fijo':'Variable'}` : ''} · ${t.fecha}`;
+      : `${t.categoria}${t.tipo_gasto ? ` · ${t.tipo_gasto==='F'?'Fijo':'Variable'}` : ''}${cuentaTag} · ${t.fecha}`;
     const extra = isMd && t.estado === 'pendiente'
       ? `<button class="md-cobrar" onclick="cobrar('${t.id}')">Cobrado ✓</button>`
       : '';
@@ -950,6 +998,11 @@ function init() {
   const t = new Date();
   document.getElementById('f-fecha').value =
     `${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')}`;
+
+  // Botones de cuenta
+  document.getElementById('cuenta-toggles').innerHTML = CUENTAS.map(c =>
+    `<button class="tog${c === S.cuenta ? ' active' : ''}" data-cuenta="${c}" onclick="setCuenta('${c}')">${c}</button>`
+  ).join('');
 
   setType('egreso');
   document.getElementById('view-resumen').classList.add('active');

@@ -3,7 +3,7 @@
 // ============================================================
 
 const SHEETS = {
-  TX:      { name: 'Transacciones', headers: ['id','fecha','tipo','descripcion','categoria','monto','tipo_gasto'] },
+  TX:      { name: 'Transacciones', headers: ['id','fecha','tipo','descripcion','categoria','monto','tipo_gasto','cuenta'] },
   BUDGET:  { name: 'Presupuesto',   headers: ['mes','categoria','monto'] },
   MEDEBEN: { name: 'Me_Deben',      headers: ['id','fecha','persona','descripcion','monto','estado'] }
 };
@@ -27,11 +27,16 @@ function getSheet(key) {
     range.setValues([headers]);
     range.setFontWeight('bold');
     range.setBackground('#E8F5E9');
+  } else {
+    // Agrega columnas nuevas si la hoja ya existía sin ellas
+    const lastCol = sheet.getLastColumn();
+    if (lastCol < headers.length) {
+      for (let i = lastCol; i < headers.length; i++) {
+        sheet.getRange(1, i + 1).setValue(headers[i]).setFontWeight('bold').setBackground('#E8F5E9');
+      }
+    }
   }
-  // Fuerza columna A del presupuesto como texto para evitar conversión de fechas
-  if (key === 'BUDGET') {
-    sheet.getRange('A:A').setNumberFormat('@');
-  }
+  if (key === 'BUDGET') sheet.getRange('A:A').setNumberFormat('@');
   return sheet;
 }
 
@@ -66,7 +71,7 @@ function addTransaccion(data) {
   const id = Utilities.getUuid();
   getSheet('TX').appendRow([
     id, data.fecha, data.tipo, data.descripcion,
-    data.categoria, Number(data.monto), data.tipo_gasto || ''
+    data.categoria, Number(data.monto), data.tipo_gasto || '', data.cuenta || ''
   ]);
   return { success: true, id };
 }
