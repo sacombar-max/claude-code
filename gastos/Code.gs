@@ -28,6 +28,10 @@ function getSheet(key) {
     range.setFontWeight('bold');
     range.setBackground('#E8F5E9');
   }
+  // Fuerza columna A del presupuesto como texto para evitar conversión de fechas
+  if (key === 'BUDGET') {
+    sheet.getRange('A:A').setNumberFormat('@');
+  }
   return sheet;
 }
 
@@ -78,15 +82,20 @@ function deleteTransaccion(id) {
 
 // ---- Presupuesto ----
 
+function mesStr(val) {
+  if (val instanceof Date) return Utilities.formatDate(val, Session.getScriptTimeZone(), 'yyyy-MM');
+  return String(val).substring(0, 7);
+}
+
 function getPresupuesto(mes) {
-  return sheetToObjects(getSheet('BUDGET')).filter(p => p.mes === mes);
+  return sheetToObjects(getSheet('BUDGET')).filter(p => mesStr(p.mes) === mes);
 }
 
 function setPresupuesto(mes, categoria, monto) {
   const sheet = getSheet('BUDGET');
   const values = sheet.getDataRange().getValues();
   for (let i = 1; i < values.length; i++) {
-    if (values[i][0] === mes && values[i][1] === categoria) {
+    if (mesStr(values[i][0]) === mes && values[i][1] === categoria) {
       sheet.getRange(i + 1, 3).setValue(Number(monto));
       return { success: true };
     }
@@ -99,7 +108,7 @@ function deletePresupuesto(mes, categoria) {
   const sheet = getSheet('BUDGET');
   const values = sheet.getDataRange().getValues();
   for (let i = 1; i < values.length; i++) {
-    if (values[i][0] === mes && values[i][1] === categoria) {
+    if (mesStr(values[i][0]) === mes && values[i][1] === categoria) {
       sheet.deleteRow(i + 1); return { success: true };
     }
   }
