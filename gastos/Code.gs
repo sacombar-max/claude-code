@@ -146,6 +146,18 @@ function deleteMeDeben(id) {
   return { success: false };
 }
 
+// ---- Diagnóstico (correr desde el editor para verificar que todo funciona) ----
+
+function testConexion() {
+  try {
+    const resultado = setPresupuesto('2026-01', 'TEST-categoria', 1);
+    deletePresupuesto('2026-01', 'TEST-categoria');
+    SpreadsheetApp.getUi().alert('✅ Todo funciona correctamente. La conexión con la hoja está bien.');
+  } catch(e) {
+    SpreadsheetApp.getUi().alert('❌ Error:\n' + e.message + '\n\nRevisa los permisos de la hoja.');
+  }
+}
+
 // ---- Importación masiva desde hoja "Importar" ----
 // Columnas esperadas: mes (YYYY-MM) | tipo | descripcion | categoria | monto | tipo_gasto
 

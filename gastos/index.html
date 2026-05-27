@@ -819,7 +819,7 @@ async function addBudget() {
     S.budget = await api('getPresupuesto', S.mes);
     renderBudget();
     toast('Guardado ✓');
-  } catch(e) { toast('Error'); }
+  } catch(e) { alert('Error al guardar presupuesto:\n' + (e.message || JSON.stringify(e))); }
 }
 
 async function updateBud(cat) {
@@ -831,7 +831,7 @@ async function updateBud(cat) {
     S.budget = await api('getPresupuesto', S.mes);
     renderBudget();
     toast('Actualizado ✓');
-  } catch(e) { toast('Error'); }
+  } catch(e) { alert('Error al actualizar:\n' + (e.message || JSON.stringify(e))); }
 }
 
 async function deleteBud(cat) {
@@ -841,7 +841,7 @@ async function deleteBud(cat) {
     S.budget = await api('getPresupuesto', S.mes);
     renderBudget();
     toast('Eliminado');
-  } catch(e) { toast('Error'); }
+  } catch(e) { alert('Error al eliminar:\n' + (e.message || JSON.stringify(e))); }
 }
 
 async function copiarPrev() {
@@ -851,7 +851,7 @@ async function copiarPrev() {
     S.budget = await api('getPresupuesto', S.mes);
     renderBudget();
     toast(`${r.count} categorías copiadas ✓`);
-  } catch(e) { toast('Error'); }
+  } catch(e) { alert('Error al copiar:\n' + (e.message || JSON.stringify(e))); }
 }
 
 // ============================================================
