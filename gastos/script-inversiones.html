@@ -1,0 +1,636 @@
+<script>
+// ── Tickers BVC (COLCAP) ──
+const TICKERS_BVC = [
+  { ticker:'BVC:ECOPETL',    nombre:'Ecopetrol',           sector:'Energía'    },
+  { ticker:'BVC:PFBCOLOM',   nombre:'Bancolombia Pref',    sector:'Financiero' },
+  { ticker:'BVC:BCOLOMBIA',  nombre:'Bancolombia Ord',     sector:'Financiero' },
+  { ticker:'BVC:GRUPOSURA',  nombre:'Grupo Sura Ord',      sector:'Financiero' },
+  { ticker:'BVC:PFGRUPSURA', nombre:'Grupo Sura Pref',     sector:'Financiero' },
+  { ticker:'BVC:NUTRESA',    nombre:'Grupo Nutresa',       sector:'Consumo'    },
+  { ticker:'BVC:ISA',        nombre:'ISA',                 sector:'Utilities'  },
+  { ticker:'BVC:GRUPOARGOS', nombre:'Grupo Argos Ord',     sector:'Industrial' },
+  { ticker:'BVC:PFGRUPOARG', nombre:'Grupo Argos Pref',    sector:'Industrial' },
+  { ticker:'BVC:CELSIA',     nombre:'Celsia',              sector:'Utilities'  },
+  { ticker:'BVC:CNEC',       nombre:'Canacol Energy',      sector:'Energía'    },
+  { ticker:'BVC:BOGOTA',     nombre:'Banco de Bogotá',     sector:'Financiero' },
+  { ticker:'BVC:CORFICOLCF', nombre:'Corficolombiana',     sector:'Financiero' },
+  { ticker:'BVC:CEMARGOS',   nombre:'Cementos Argos',      sector:'Industrial' },
+  { ticker:'BVC:PFDAVVNDA',  nombre:'Davivienda Pref',     sector:'Financiero' },
+  { ticker:'BVC:MINEROS',    nombre:'Mineros',             sector:'Materiales' },
+  { ticker:'BVC:CLH',        nombre:'Cemex Latam',         sector:'Industrial' },
+  { ticker:'BVC:ETB',        nombre:'ETB',                 sector:'Telecom'    },
+  { ticker:'BVC:PROMIGAS',   nombre:'Promigas',            sector:'Energía'    },
+  { ticker:'BVC:ICAP',       nombre:'iCOLCAP ETF',         sector:'ETF'        },
+];
+
+// ── Tickers NYSE / NASDAQ ──
+const TICKERS_US = [
+  // Tecnología
+  { ticker:'AAPL',  nombre:'Apple',              sector:'Tecnología'  },
+  { ticker:'MSFT',  nombre:'Microsoft',          sector:'Tecnología'  },
+  { ticker:'NVDA',  nombre:'Nvidia',             sector:'Tecnología'  },
+  { ticker:'GOOGL', nombre:'Alphabet Cl A',      sector:'Tecnología'  },
+  { ticker:'GOOG',  nombre:'Alphabet Cl C',      sector:'Tecnología'  },
+  { ticker:'META',  nombre:'Meta Platforms',     sector:'Tecnología'  },
+  { ticker:'AMZN',  nombre:'Amazon',             sector:'Tecnología'  },
+  { ticker:'TSLA',  nombre:'Tesla',              sector:'Tecnología'  },
+  { ticker:'AMD',   nombre:'Advanced Micro Dev', sector:'Tecnología'  },
+  { ticker:'INTC',  nombre:'Intel',              sector:'Tecnología'  },
+  { ticker:'AVGO',  nombre:'Broadcom',           sector:'Tecnología'  },
+  { ticker:'QCOM',  nombre:'Qualcomm',           sector:'Tecnología'  },
+  { ticker:'TXN',   nombre:'Texas Instruments',  sector:'Tecnología'  },
+  { ticker:'ORCL',  nombre:'Oracle',             sector:'Tecnología'  },
+  { ticker:'ADBE',  nombre:'Adobe',              sector:'Tecnología'  },
+  { ticker:'CRM',   nombre:'Salesforce',         sector:'Tecnología'  },
+  { ticker:'NOW',   nombre:'ServiceNow',         sector:'Tecnología'  },
+  { ticker:'INTU',  nombre:'Intuit',             sector:'Tecnología'  },
+  { ticker:'AMAT',  nombre:'Applied Materials',  sector:'Tecnología'  },
+  { ticker:'MU',    nombre:'Micron Technology',  sector:'Tecnología'  },
+  { ticker:'SHOP',  nombre:'Shopify',            sector:'Tecnología'  },
+  { ticker:'PYPL',  nombre:'PayPal',             sector:'Tecnología'  },
+  { ticker:'UBER',  nombre:'Uber',               sector:'Tecnología'  },
+  { ticker:'ABNB',  nombre:'Airbnb',             sector:'Tecnología'  },
+  { ticker:'NFLX',  nombre:'Netflix',            sector:'Tecnología'  },
+  // Salud
+  { ticker:'JNJ',   nombre:'Johnson & Johnson',  sector:'Salud'       },
+  { ticker:'LLY',   nombre:'Eli Lilly',          sector:'Salud'       },
+  { ticker:'UNH',   nombre:'UnitedHealth',       sector:'Salud'       },
+  { ticker:'ABBV',  nombre:'AbbVie',             sector:'Salud'       },
+  { ticker:'MRK',   nombre:'Merck',              sector:'Salud'       },
+  { ticker:'PFE',   nombre:'Pfizer',             sector:'Salud'       },
+  { ticker:'AMGN',  nombre:'Amgen',              sector:'Salud'       },
+  { ticker:'GILD',  nombre:'Gilead Sciences',    sector:'Salud'       },
+  { ticker:'MRNA',  nombre:'Moderna',            sector:'Salud'       },
+  { ticker:'VRTX',  nombre:'Vertex Pharma',      sector:'Salud'       },
+  { ticker:'BMY',   nombre:'Bristol-Myers',      sector:'Salud'       },
+  { ticker:'CVS',   nombre:'CVS Health',         sector:'Salud'       },
+  // Financiero
+  { ticker:'JPM',   nombre:'JPMorgan Chase',     sector:'Financiero'  },
+  { ticker:'BAC',   nombre:'Bank of America',    sector:'Financiero'  },
+  { ticker:'WFC',   nombre:'Wells Fargo',        sector:'Financiero'  },
+  { ticker:'GS',    nombre:'Goldman Sachs',      sector:'Financiero'  },
+  { ticker:'MS',    nombre:'Morgan Stanley',     sector:'Financiero'  },
+  { ticker:'C',     nombre:'Citigroup',          sector:'Financiero'  },
+  { ticker:'BLK',   nombre:'BlackRock',          sector:'Financiero'  },
+  { ticker:'SCHW',  nombre:'Charles Schwab',     sector:'Financiero'  },
+  { ticker:'AXP',   nombre:'American Express',   sector:'Financiero'  },
+  { ticker:'V',     nombre:'Visa',               sector:'Financiero'  },
+  { ticker:'MA',    nombre:'Mastercard',         sector:'Financiero'  },
+  { ticker:'BRK-B', nombre:'Berkshire B',        sector:'Financiero'  },
+  // Consumo
+  { ticker:'WMT',   nombre:'Walmart',            sector:'Consumo'     },
+  { ticker:'COST',  nombre:'Costco',             sector:'Consumo'     },
+  { ticker:'TGT',   nombre:'Target',             sector:'Consumo'     },
+  { ticker:'HD',    nombre:'Home Depot',         sector:'Consumo'     },
+  { ticker:'LOW',   nombre:'Lowe\'s',            sector:'Consumo'     },
+  { ticker:'MCD',   nombre:'McDonald\'s',        sector:'Consumo'     },
+  { ticker:'SBUX',  nombre:'Starbucks',          sector:'Consumo'     },
+  { ticker:'NKE',   nombre:'Nike',               sector:'Consumo'     },
+  { ticker:'PG',    nombre:'Procter & Gamble',   sector:'Consumo'     },
+  { ticker:'KO',    nombre:'Coca-Cola',          sector:'Consumo'     },
+  { ticker:'PEP',   nombre:'PepsiCo',            sector:'Consumo'     },
+  { ticker:'PM',    nombre:'Philip Morris',      sector:'Consumo'     },
+  { ticker:'DIS',   nombre:'Disney',             sector:'Consumo'     },
+  // Energía
+  { ticker:'XOM',   nombre:'Exxon Mobil',        sector:'Energía'     },
+  { ticker:'CVX',   nombre:'Chevron',            sector:'Energía'     },
+  { ticker:'COP',   nombre:'ConocoPhillips',     sector:'Energía'     },
+  { ticker:'EOG',   nombre:'EOG Resources',      sector:'Energía'     },
+  { ticker:'SLB',   nombre:'Schlumberger',       sector:'Energía'     },
+  { ticker:'OXY',   nombre:'Occidental',         sector:'Energía'     },
+  { ticker:'PSX',   nombre:'Phillips 66',        sector:'Energía'     },
+  { ticker:'VLO',   nombre:'Valero Energy',      sector:'Energía'     },
+  // Industrial
+  { ticker:'BA',    nombre:'Boeing',             sector:'Industrial'  },
+  { ticker:'CAT',   nombre:'Caterpillar',        sector:'Industrial'  },
+  { ticker:'DE',    nombre:'John Deere',         sector:'Industrial'  },
+  { ticker:'HON',   nombre:'Honeywell',          sector:'Industrial'  },
+  { ticker:'GE',    nombre:'GE Aerospace',       sector:'Industrial'  },
+  { ticker:'RTX',   nombre:'RTX Corp',           sector:'Industrial'  },
+  { ticker:'LMT',   nombre:'Lockheed Martin',    sector:'Industrial'  },
+  { ticker:'NOC',   nombre:'Northrop Grumman',   sector:'Industrial'  },
+  { ticker:'UPS',   nombre:'UPS',                sector:'Industrial'  },
+  { ticker:'FDX',   nombre:'FedEx',              sector:'Industrial'  },
+  // Utilities / Real Estate
+  { ticker:'NEE',   nombre:'NextEra Energy',     sector:'Utilities'   },
+  { ticker:'DUK',   nombre:'Duke Energy',        sector:'Utilities'   },
+  { ticker:'SO',    nombre:'Southern Co',        sector:'Utilities'   },
+  { ticker:'AMT',   nombre:'American Tower',     sector:'Real Estate' },
+  { ticker:'PLD',   nombre:'Prologis',           sector:'Real Estate' },
+  // ETFs
+  { ticker:'SPY',   nombre:'S&P 500 (SPDR)',     sector:'ETF'         },
+  { ticker:'QQQ',   nombre:'Nasdaq 100',         sector:'ETF'         },
+  { ticker:'IVV',   nombre:'S&P 500 (iShares)',  sector:'ETF'         },
+  { ticker:'VTI',   nombre:'Total Market (VG)',  sector:'ETF'         },
+  { ticker:'VOO',   nombre:'S&P 500 (VG)',       sector:'ETF'         },
+  { ticker:'VEA',   nombre:'Developed Mkts VG',  sector:'ETF'         },
+  { ticker:'VWO',   nombre:'Emerging Mkts VG',   sector:'ETF'         },
+  { ticker:'EEM',   nombre:'Emerging Mkts iSh',  sector:'ETF'         },
+  { ticker:'EWZ',   nombre:'Brazil ETF',         sector:'ETF'         },
+  { ticker:'ILF',   nombre:'Latin America 40',   sector:'ETF'         },
+  { ticker:'GLD',   nombre:'Gold (SPDR)',         sector:'ETF'         },
+  { ticker:'SLV',   nombre:'Silver (iShares)',    sector:'ETF'         },
+  { ticker:'TLT',   nombre:'20yr Treasury',      sector:'ETF'         },
+  { ticker:'HYG',   nombre:'High Yield Bond',    sector:'ETF'         },
+  { ticker:'XLF',   nombre:'Financials SPDR',    sector:'ETF'         },
+  { ticker:'XLK',   nombre:'Technology SPDR',    sector:'ETF'         },
+  { ticker:'XLE',   nombre:'Energy SPDR',        sector:'ETF'         },
+  { ticker:'XLV',   nombre:'Healthcare SPDR',    sector:'ETF'         },
+  { ticker:'XLU',   nombre:'Utilities SPDR',     sector:'ETF'         },
+  { ticker:'SOXX',  nombre:'Semiconductors',     sector:'ETF'         },
+  { ticker:'SMH',   nombre:'Semiconductors VG',  sector:'ETF'         },
+  { ticker:'ARKK',  nombre:'ARK Innovation',     sector:'ETF'         },
+  { ticker:'MCHI',  nombre:'China iShares',      sector:'ETF'         },
+];
+
+// ============================================================
+// INVERSIONES
+// ============================================================
+const INV_TIPOS = {
+  accion_nacional:       'Acción Nacional',
+  accion_internacional:  'Acción Internacional',
+  prestamo:              'Préstamo',
+  divisa:                'Divisa'
+};
+function invTipoLabel(t) { return INV_TIPOS[t] || t; }
+
+async function loadInversiones() {
+  try {
+    S.inversiones = await api('getInversiones');
+    setInvView(S.invView);
+  } catch(e) { console.error(e); toast('Error cargando inversiones'); }
+}
+
+function setInvView(v) {
+  S.invView = v;
+  document.querySelectorAll('#view-inversiones .type-tab').forEach((b, i) =>
+    b.classList.toggle('active', ['portafolio','nueva','informe'][i] === v)
+  );
+  document.getElementById('inv-portafolio').style.display = v === 'portafolio' ? '' : 'none';
+  document.getElementById('inv-nueva').style.display      = v === 'nueva'      ? '' : 'none';
+  document.getElementById('inv-informe').style.display    = v === 'informe'    ? '' : 'none';
+  if (v === 'portafolio') renderPortafolio();
+  if (v === 'nueva')      renderNuevaInversion();
+  if (v === 'informe')    renderInformeAnual();
+}
+
+const TAB_TIPOS = {
+  colombia: ['accion_nacional'],
+  eeuu:     ['accion_internacional'],
+  divisas:  ['divisa'],
+  prestamos:['prestamo']
+};
+
+function tickerNombre(ticker, tipo) {
+  if (tipo === 'accion_nacional') {
+    const t = TICKERS_BVC.find(t => t.ticker === ticker);
+    return t ? t.nombre : ticker;
+  }
+  if (tipo === 'accion_internacional') {
+    const t = TICKERS_US.find(t => t.ticker === ticker);
+    return t ? t.nombre : ticker;
+  }
+  return ticker;
+}
+
+function setInvTab(tab) {
+  S.invTab = tab;
+  document.querySelectorAll('.inv-gtab').forEach(b =>
+    b.classList.toggle('active', b.dataset.tab === tab)
+  );
+  renderPortafolioTab();
+}
+
+function renderPortafolio() {
+  const el = document.getElementById('inv-portafolio');
+  const abiertas = S.inversiones.filter(i => i.estado === 'abierta');
+  const cerradas = S.inversiones.filter(i => i.estado === 'cerrada');
+  const totalInv = abiertas.reduce((s, i) => s + Number(i.valor_cop_entrada), 0);
+  const gananciaRealizada = cerradas.reduce((s, i) => s + (Number(i.valor_cop_cierre) - Number(i.valor_cop_entrada)), 0);
+
+  const tabs = [
+    { id:'colombia',  label:'🇨🇴 Colombia' },
+    { id:'eeuu',      label:'🇺🇸 EE.UU.'   },
+    { id:'divisas',   label:'💱 Divisas'   },
+    { id:'prestamos', label:'🤝 Préstamos' }
+  ];
+
+  el.innerHTML = `
+    <div class="grid2" style="margin-bottom:10px">
+      <div class="card" style="margin-bottom:0">
+        <div class="card-label">Invertido Activo</div>
+        <div class="card-value v-purple" style="font-size:20px">${cop(totalInv)}</div>
+      </div>
+      <div class="card" style="margin-bottom:0">
+        <div class="card-label">Ganancia Realizada</div>
+        <div class="card-value ${gananciaRealizada >= 0 ? 'v-income' : 'v-expense'}" style="font-size:20px">${cop(gananciaRealizada)}</div>
+      </div>
+    </div>
+    <div class="inv-group-tabs">
+      ${tabs.map(t => `<button class="inv-gtab${S.invTab===t.id?' active':''}" data-tab="${t.id}" onclick="setInvTab('${t.id}')">${t.label}</button>`).join('')}
+    </div>
+    <div id="inv-tab-content"></div>`;
+
+  renderPortafolioTab();
+}
+
+function renderPortafolioTab() {
+  const tipos = TAB_TIPOS[S.invTab] || [];
+  const items = S.inversiones.filter(i => tipos.includes(i.tipo));
+  const abiertas = items.filter(i => i.estado === 'abierta');
+  const cerradas = items.filter(i => i.estado === 'cerrada');
+  const el = document.getElementById('inv-tab-content');
+  if (!el) return;
+
+  if (!items.length) {
+    el.innerHTML = '<div class="empty" style="padding:28px 0"><div class="empty-icon">📈</div>Sin inversiones en esta categoría</div>';
+    return;
+  }
+
+  let html = '';
+  if (abiertas.length) {
+    html += '<div class="sec">Abiertas</div>' + abiertas.map(renderInvCard).join('');
+  }
+  if (cerradas.length) {
+    html += `<div class="sec" style="margin-top:14px">Cerradas (${cerradas.length})</div>` + cerradas.map(renderInvCard).join('');
+  }
+  el.innerHTML = html;
+}
+
+function renderInvCard(inv) {
+  const abierta = inv.estado === 'abierta';
+  const ganancia = !abierta ? Number(inv.valor_cop_cierre) - Number(inv.valor_cop_entrada) : null;
+  const ganPct = ganancia !== null && Number(inv.valor_cop_entrada) > 0
+    ? (ganancia / Number(inv.valor_cop_entrada) * 100).toFixed(1) : '0.0';
+
+  const esAccion = inv.tipo === 'accion_nacional' || inv.tipo === 'accion_internacional';
+  const displayName = esAccion ? tickerNombre(inv.nombre, inv.tipo) : inv.nombre;
+  const tickerTag = esAccion ? `<div class="inv-ticker">${inv.nombre}</div>` : '';
+
+  let amountsHtml;
+  if (inv.tipo === 'prestamo') {
+    amountsHtml = `
+      <div class="inv-amt-box"><div class="inv-amt-label">Principal</div><div class="inv-amt-val">${cop(inv.valor_cop_entrada)}</div></div>
+      <div class="inv-amt-box"><div class="inv-amt-label">Tasa anual</div><div class="inv-amt-val">${inv.tasa}%</div></div>
+      <div class="inv-amt-box"><div class="inv-amt-label">Fecha</div><div class="inv-amt-val" style="font-size:11px">${inv.fecha}</div></div>`;
+  } else if (inv.tipo === 'divisa') {
+    amountsHtml = `
+      <div class="inv-amt-box"><div class="inv-amt-label">Cantidad</div><div class="inv-amt-val">${Number(inv.cantidad).toLocaleString()} ${inv.moneda}</div></div>
+      <div class="inv-amt-box"><div class="inv-amt-label">Tasa entrada</div><div class="inv-amt-val">${cop(inv.precio_entrada)}</div></div>
+      <div class="inv-amt-box"><div class="inv-amt-label">Valor COP</div><div class="inv-amt-val">${cop(inv.valor_cop_entrada)}</div></div>`;
+  } else {
+    amountsHtml = `
+      <div class="inv-amt-box"><div class="inv-amt-label">Cantidad</div><div class="inv-amt-val">${inv.cantidad}</div></div>
+      <div class="inv-amt-box"><div class="inv-amt-label">P. Entrada</div><div class="inv-amt-val">${cop(inv.precio_entrada)}</div></div>
+      <div class="inv-amt-box"><div class="inv-amt-label">Total COP</div><div class="inv-amt-val">${cop(inv.valor_cop_entrada)}</div></div>`;
+  }
+
+  const closedInfo = !abierta && ganancia !== null ? `
+    <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
+      <span style="font-size:12px;color:var(--muted)">Cierre: ${inv.fecha_cierre} · ${cop(inv.valor_cop_cierre)}</span>
+      <span style="font-size:14px;font-weight:700" class="${ganancia >= 0 ? 'gain-pos' : 'gain-neg'}">${ganancia >= 0 ? '+' : ''}${cop(ganancia)} (${ganPct}%)</span>
+    </div>` : '';
+
+  const precioBtn = (abierta && inv.tipo !== 'prestamo')
+    ? `<button class="btn-inv-action btn-inv-price" onclick="getPrecioActualUI('${inv.id}','${inv.tipo}','${inv.nombre}','${inv.moneda}')">Ver precio</button>`
+    : '';
+
+  const actionsHtml = abierta ? `
+    <div class="inv-actions">
+      <button class="btn-inv-action btn-inv-close" onclick="initCierreForm('${inv.id}')">Cerrar posición</button>
+      ${precioBtn}
+      <button class="btn-inv-action" onclick="deleteInvUI('${inv.id}')">×</button>
+    </div>
+    <div class="cierre-form" id="cierre-${inv.id}" style="display:none">
+      <label>Fecha de cierre</label>
+      <input type="date" id="c-fecha-${inv.id}" value="${new Date().toISOString().split('T')[0]}">
+      ${inv.tipo !== 'prestamo' && inv.tipo !== 'divisa' ? `<label>Precio de cierre (${inv.moneda})</label><input type="number" id="c-precio-${inv.id}" placeholder="0" inputmode="decimal">` : ''}
+      <label>Valor total COP al cierre</label>
+      <input type="number" id="c-valorCOP-${inv.id}" placeholder="0" inputmode="numeric">
+      <button class="btn-main" style="margin-top:0" onclick="submitCierre('${inv.id}')">Confirmar cierre</button>
+    </div>` : `
+    <div class="inv-actions">
+      <button class="btn-inv-action" onclick="deleteInvUI('${inv.id}')">Eliminar</button>
+    </div>`;
+
+  return `
+    <div class="inv-card">
+      <div class="inv-header">
+        <div>
+          <div class="inv-title">${displayName}</div>
+          ${tickerTag}
+          <div class="inv-sub">${invTipoLabel(inv.tipo)} · ${inv.fecha}</div>
+        </div>
+        <span class="inv-badge ${abierta ? 'badge-open' : 'badge-closed'}">${abierta ? 'Abierta' : 'Cerrada'}</span>
+      </div>
+      <div class="inv-amounts">${amountsHtml}</div>
+      ${closedInfo}
+      ${actionsHtml}
+      <div id="precio-result-${inv.id}"></div>
+    </div>`;
+}
+
+function initCierreForm(id) {
+  const el = document.getElementById(`cierre-${id}`);
+  if (el) el.style.display = el.style.display === 'none' ? '' : 'none';
+}
+
+async function submitCierre(id) {
+  const fecha    = document.getElementById(`c-fecha-${id}`).value;
+  const valorCOP = document.getElementById(`c-valorCOP-${id}`).value;
+  if (!fecha || !valorCOP) { toast('Completa fecha y valor COP'); return; }
+  const precioEl = document.getElementById(`c-precio-${id}`);
+  const precio   = precioEl ? precioEl.value : '0';
+  try {
+    await api('cerrarInversion', id, {
+      fecha_cierre: fecha,
+      precio_cierre: Number(precio || 0),
+      valor_cop_cierre: Number(valorCOP)
+    });
+    toast('Inversión cerrada ✓');
+    S.inversiones = await api('getInversiones');
+    renderPortafolio();
+  } catch(e) { toast('Error al cerrar'); console.error(e); }
+}
+
+async function getPrecioActualUI(id, tipo, nombre, moneda) {
+  const el = document.getElementById(`precio-result-${id}`);
+  el.innerHTML = '<div style="font-size:12px;color:var(--muted);padding:6px 0">Consultando precio... (puede tardar ~5s)</div>';
+  try {
+    const r = await api('getPrecioActual', tipo, nombre, moneda);
+    if (!r) { el.innerHTML = '<div style="font-size:12px;color:var(--expense);padding:6px 0">No se pudo obtener el precio</div>'; return; }
+    const inv = S.inversiones.find(i => i.id === id);
+    let html = '';
+    if (tipo === 'divisa') {
+      const valorActual = Number(inv.cantidad) * r.tasa;
+      const ganancia    = valorActual - Number(inv.valor_cop_entrada);
+      html = `<div style="background:var(--bg);border-radius:8px;padding:10px;margin-top:8px;font-size:13px">
+        <div>Tasa actual: <b>${cop(r.tasa)}</b> / ${moneda}</div>
+        <div>Valor actual: <b>${cop(valorActual)}</b></div>
+        <div>Ganancia no realizada: <b class="${ganancia>=0?'gain-pos':'gain-neg'}">${ganancia>=0?'+':''}${cop(ganancia)}</b></div>
+      </div>`;
+    } else if (tipo === 'accion_nacional') {
+      const valorActual = Number(inv.cantidad) * r.precio;
+      const ganancia    = valorActual - Number(inv.valor_cop_entrada);
+      html = `<div style="background:var(--bg);border-radius:8px;padding:10px;margin-top:8px;font-size:13px">
+        <div>Precio actual: <b>${cop(r.precio)}</b></div>
+        <div>Valor actual: <b>${cop(valorActual)}</b></div>
+        <div>Ganancia no realizada: <b class="${ganancia>=0?'gain-pos':'gain-neg'}">${ganancia>=0?'+':''}${cop(ganancia)}</b></div>
+      </div>`;
+    } else if (tipo === 'accion_internacional') {
+      const valorActual = Number(inv.cantidad) * r.precioCOP;
+      const ganancia    = valorActual - Number(inv.valor_cop_entrada);
+      html = `<div style="background:var(--bg);border-radius:8px;padding:10px;margin-top:8px;font-size:13px">
+        <div>Precio: <b>USD ${r.precioUSD.toFixed(2)}</b> · Tasa: <b>${cop(r.tasaCOP)}</b></div>
+        <div>Precio COP: <b>${cop(r.precioCOP)}</b></div>
+        <div>Valor actual: <b>${cop(valorActual)}</b></div>
+        <div>Ganancia no realizada: <b class="${ganancia>=0?'gain-pos':'gain-neg'}">${ganancia>=0?'+':''}${cop(ganancia)}</b></div>
+      </div>`;
+    }
+    el.innerHTML = html;
+  } catch(e) { el.innerHTML = '<div style="font-size:12px;color:var(--expense);padding:6px 0">Error al consultar precio</div>'; }
+}
+
+async function deleteInvUI(id) {
+  if (!confirm('¿Eliminar esta inversión?')) return;
+  try {
+    await api('deleteInversion', id);
+    toast('Eliminada');
+    S.inversiones = await api('getInversiones');
+    renderPortafolio();
+  } catch(e) { toast('Error'); }
+}
+
+function renderNuevaInversion() {
+  const el = document.getElementById('inv-nueva');
+  el.innerHTML = `
+    <div class="card">
+      <div class="form-group">
+        <label>Tipo de inversión</label>
+        <select id="inv-tipo" onchange="renderFormInversion()">
+          <option value="accion_nacional">Acción Nacional (BVC Colombia)</option>
+          <option value="accion_internacional">Acción / ETF Internacional (EE.UU.)</option>
+          <option value="prestamo">Préstamo a tercero</option>
+          <option value="divisa">Divisa (USD / EUR)</option>
+        </select>
+      </div>
+      <div id="inv-form-fields"></div>
+      <div class="form-group">
+        <label>Fecha</label>
+        <input type="date" id="inv-fecha" value="${new Date().toISOString().split('T')[0]}">
+      </div>
+      <div class="form-group">
+        <label>Nota (opcional)</label>
+        <input type="text" id="inv-nota" placeholder="Observaciones...">
+      </div>
+      <button class="btn-main" onclick="addInversionSubmit()">Registrar inversión</button>
+    </div>`;
+  renderFormInversion();
+}
+
+function bvcOptions() {
+  const sectors = [...new Set(TICKERS_BVC.map(t => t.sector))];
+  return sectors.map(s => {
+    const opts = TICKERS_BVC.filter(t => t.sector === s)
+      .map(t => `<option value="${t.ticker}">${t.nombre} (${t.ticker})</option>`).join('');
+    return `<optgroup label="${s}">${opts}</optgroup>`;
+  }).join('');
+}
+
+function filterUSTickers() {
+  const q = document.getElementById('inv-us-filter').value.toLowerCase();
+  const sel = document.getElementById('inv-nombre-us');
+  const filtered = q
+    ? TICKERS_US.filter(t => t.ticker.toLowerCase().includes(q) || t.nombre.toLowerCase().includes(q) || t.sector.toLowerCase().includes(q))
+    : TICKERS_US;
+  sel.innerHTML = filtered.map(t => `<option value="${t.ticker}">${t.nombre} — ${t.ticker} (${t.sector})</option>`).join('');
+}
+
+function renderFormInversion() {
+  const tipo = document.getElementById('inv-tipo').value;
+  const el   = document.getElementById('inv-form-fields');
+
+  if (tipo === 'accion_nacional') {
+    el.innerHTML = `
+      <div class="form-group">
+        <label>Acción / ETF (BVC)</label>
+        <select id="inv-nombre-bvc">${bvcOptions()}</select>
+      </div>
+      <div class="form-group">
+        <label>Número de acciones</label>
+        <input type="number" id="inv-cantidad" placeholder="0" inputmode="decimal">
+      </div>
+      <div class="form-group">
+        <label>Precio de entrada (COP por acción)</label>
+        <input type="number" id="inv-precio" placeholder="0" inputmode="numeric">
+      </div>`;
+  } else if (tipo === 'accion_internacional') {
+    el.innerHTML = `
+      <div class="form-group ticker-search">
+        <label>Buscar acción / ETF</label>
+        <input type="text" id="inv-us-filter" placeholder="Ej: Apple, AAPL, ETF..." oninput="filterUSTickers()">
+      </div>
+      <div class="form-group">
+        <label>Seleccionar</label>
+        <select id="inv-nombre-us"></select>
+      </div>
+      <div class="form-group">
+        <label>Número de acciones / unidades</label>
+        <input type="number" id="inv-cantidad" placeholder="0" inputmode="decimal">
+      </div>
+      <div class="form-group">
+        <label>Precio de entrada (USD por acción)</label>
+        <input type="number" id="inv-precio" placeholder="0" inputmode="decimal">
+      </div>
+      <div class="form-group">
+        <label>Tasa USD/COP al comprar</label>
+        <input type="number" id="inv-tasa" placeholder="ej: 4200" inputmode="numeric">
+      </div>`;
+    filterUSTickers();
+  } else if (tipo === 'prestamo') {
+    el.innerHTML = `
+      <div class="form-group">
+        <label>Persona / Deudor</label>
+        <input type="text" id="inv-nombre-text" placeholder="Nombre del deudor">
+      </div>
+      <div class="form-group">
+        <label>Monto prestado (COP)</label>
+        <input type="number" id="inv-precio" placeholder="0" inputmode="numeric">
+      </div>
+      <div class="form-group">
+        <label>Tasa de interés anual (%)</label>
+        <input type="number" id="inv-tasa" placeholder="0" inputmode="decimal">
+      </div>`;
+  } else if (tipo === 'divisa') {
+    el.innerHTML = `
+      <div class="form-group">
+        <label>Moneda</label>
+        <select id="inv-moneda">
+          <option value="USD">USD — Dólar estadounidense</option>
+          <option value="EUR">EUR — Euro</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Cantidad de divisa comprada</label>
+        <input type="number" id="inv-cantidad" placeholder="ej: 1000" inputmode="decimal">
+      </div>
+      <div class="form-group">
+        <label>Tasa de compra (COP por unidad)</label>
+        <input type="number" id="inv-precio" placeholder="ej: 4200" inputmode="numeric">
+      </div>`;
+  }
+}
+
+async function addInversionSubmit() {
+  const tipo  = document.getElementById('inv-tipo').value;
+  const fecha = document.getElementById('inv-fecha').value;
+  const nota  = document.getElementById('inv-nota').value;
+  if (!fecha) { toast('Ingresa la fecha'); return; }
+
+  let data = { tipo, fecha, nota };
+  try {
+    if (tipo === 'accion_nacional') {
+      const nombre   = document.getElementById('inv-nombre-bvc').value;
+      const cantidad = Number(document.getElementById('inv-cantidad').value);
+      const precio   = Number(document.getElementById('inv-precio').value);
+      if (!nombre || !cantidad || !precio) { toast('Completa todos los campos'); return; }
+      Object.assign(data, { nombre, moneda: 'COP', cantidad, precio_entrada: precio, valor_cop_entrada: cantidad * precio, tasa: 0 });
+    } else if (tipo === 'accion_internacional') {
+      const nombre   = document.getElementById('inv-nombre-us').value;
+      const cantidad = Number(document.getElementById('inv-cantidad').value);
+      const precio   = Number(document.getElementById('inv-precio').value);
+      const tasa     = Number(document.getElementById('inv-tasa').value);
+      if (!nombre || !cantidad || !precio || !tasa) { toast('Completa todos los campos'); return; }
+      Object.assign(data, { nombre, moneda: 'USD', cantidad, precio_entrada: precio, valor_cop_entrada: cantidad * precio * tasa, tasa });
+    } else if (tipo === 'prestamo') {
+      const nombre = document.getElementById('inv-nombre-text').value.trim();
+      const monto  = Number(document.getElementById('inv-precio').value);
+      const tasa   = Number(document.getElementById('inv-tasa').value || 0);
+      if (!nombre || !monto) { toast('Completa todos los campos'); return; }
+      Object.assign(data, { nombre, moneda: 'COP', cantidad: 1, precio_entrada: monto, valor_cop_entrada: monto, tasa });
+    } else if (tipo === 'divisa') {
+      const moneda   = document.getElementById('inv-moneda').value;
+      const cantidad = Number(document.getElementById('inv-cantidad').value);
+      const precio   = Number(document.getElementById('inv-precio').value);
+      if (!cantidad || !precio) { toast('Completa todos los campos'); return; }
+      Object.assign(data, { nombre: moneda, moneda, cantidad, precio_entrada: precio, valor_cop_entrada: cantidad * precio, tasa: 0 });
+    }
+    await api('addInversion', data);
+    toast('Inversión registrada ✓');
+    S.inversiones = await api('getInversiones');
+    setInvView('portafolio');
+  } catch(e) { toast('Error al registrar'); console.error(e); }
+}
+
+function renderInformeAnual() {
+  const el   = document.getElementById('inv-informe');
+  const anio = S.invAnio;
+  const cerradas = S.inversiones.filter(i =>
+    i.estado === 'cerrada' && String(i.fecha_cierre).startsWith(anio)
+  );
+
+  let html = `
+    <div class="card" style="margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <span style="font-weight:700;font-size:15px">Informe Anual</span>
+        <div class="year-nav">
+          <button onclick="changeInvAnio(-1)">‹</button>
+          <span id="inv-year-lbl">${anio}</span>
+          <button onclick="changeInvAnio(1)">›</button>
+        </div>
+      </div>
+    </div>`;
+
+  if (!cerradas.length) {
+    html += `<div class="empty"><div class="empty-icon">📋</div>Sin inversiones cerradas en ${anio}</div>`;
+    el.innerHTML = html; return;
+  }
+
+  const byTipo = {};
+  cerradas.forEach(i => { (byTipo[i.tipo] = byTipo[i.tipo] || []).push(i); });
+
+  let totalGanancia = 0;
+  Object.entries(byTipo).forEach(([tipo, invs]) => {
+    const ganTipo = invs.reduce((s, i) => s + (Number(i.valor_cop_cierre) - Number(i.valor_cop_entrada)), 0);
+    totalGanancia += ganTipo;
+    html += `<div class="card" style="margin-bottom:10px">
+      <div style="font-weight:600;font-size:13px;color:var(--muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:.4px">${invTipoLabel(tipo)}</div>`;
+    invs.forEach(inv => {
+      const gan = Number(inv.valor_cop_cierre) - Number(inv.valor_cop_entrada);
+      const pct = Number(inv.valor_cop_entrada) > 0 ? (gan / Number(inv.valor_cop_entrada) * 100).toFixed(1) : '0.0';
+      html += `
+        <div class="informe-row">
+          <div>
+            <div style="font-weight:500">${inv.nombre}</div>
+            <div style="font-size:11px;color:var(--muted)">${inv.fecha} → ${inv.fecha_cierre}</div>
+          </div>
+          <div style="text-align:right">
+            <div class="${gan >= 0 ? 'gain-pos' : 'gain-neg'}" style="font-weight:600">${gan >= 0 ? '+' : ''}${cop(gan)}</div>
+            <div style="font-size:11px;color:var(--muted)">${pct}% ROI</div>
+          </div>
+        </div>`;
+    });
+    html += `
+      <div style="display:flex;justify-content:space-between;margin-top:8px;padding-top:8px;border-top:2px solid var(--border);font-size:13px;font-weight:700">
+        <span>Subtotal</span>
+        <span class="${ganTipo >= 0 ? 'gain-pos' : 'gain-neg'}">${ganTipo >= 0 ? '+' : ''}${cop(ganTipo)}</span>
+      </div>
+    </div>`;
+  });
+
+  html += `
+    <div class="informe-total">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <span style="font-size:14px;font-weight:600">GANANCIA TOTAL ${anio}</span>
+        <span style="font-size:18px;font-weight:700" class="${totalGanancia >= 0 ? 'gain-pos' : 'gain-neg'}">${totalGanancia >= 0 ? '+' : ''}${cop(totalGanancia)}</span>
+      </div>
+    </div>`;
+
+  el.innerHTML = html;
+}
+
+function changeInvAnio(d) {
+  S.invAnio = String(parseInt(S.invAnio) + d);
+  renderInformeAnual();
+}
+</script>

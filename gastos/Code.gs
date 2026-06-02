@@ -10,10 +10,14 @@ const SHEETS = {
 };
 
 function doGet() {
-  return HtmlService.createHtmlOutputFromFile('index')
+  return HtmlService.createTemplateFromFile('index').evaluate()
     .setTitle('Mis Finanzas')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1, user-scalable=no')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+}
+
+function include(filename) {
+  return HtmlService.createHtmlOutputFromFile(filename).getContent();
 }
 
 // ---- Helpers ----

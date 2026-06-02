@@ -1,0 +1,618 @@
+<script>
+// ============================================================
+// CONFIG
+// ============================================================
+const CATS_EGRESO = [
+  'Vivienda','Alimentos y supermercado','Salud y Bienestar','Transporte',
+  'Ocio y Entretenimiento','Comida fuera de casa','Cafés','Compras Personales',
+  'Compras Hogar','Viajes personales','Viajes de Trabajo','Ahorro',
+  'Deuda','Regalos a otros','Donaciones','Otro'
+];
+const CATS_INGRESO = ['Salario','Saldo mes anterior','Freelance','Otro ingreso'];
+const CUENTAS = ['Cuenta de Ahorros','Efectivo','AFC'];
+const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+const MESES_CORTOS = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+
+// ============================================================
+// STATE
+// ============================================================
+const now = new Date();
+const S = {
+  view:        'resumen',
+  mes:         fmt(now.getFullYear(), now.getMonth() + 1),
+  anio:        String(now.getFullYear()),
+  txs:         [],
+  budget:      [],
+  medeben:     [],
+  trends:      [],
+  inversiones: [],
+  invView:     'portafolio',
+  invTab:      'colombia',
+  invAnio:     String(now.getFullYear()),
+  rtype:       'egreso',
+  tgasto:      'F',
+  cuenta:      'Cuenta de Ahorros',
+  filtro:      'todos',
+  chart:       null
+};
+
+function fmt(y, m) { return `${y}-${String(m).padStart(2,'0')}`; }
+
+// ============================================================
+// UTILS
+// ============================================================
+function cop(n) {
+  return new Intl.NumberFormat('es-CO',{style:'currency',currency:'COP',minimumFractionDigits:0}).format(n||0);
+}
+function mesLabel(s) {
+  const [y, m] = s.split('-');
+  return `${MESES[parseInt(m)-1]} ${y}`;
+}
+function api(fn, ...args) {
+  return new Promise((ok, fail) =>
+    google.script.run.withSuccessHandler(ok).withFailureHandler(fail)[fn](...args)
+  );
+}
+let toastTimer;
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('on');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('on'), 2600);
+}
+
+// ============================================================
+// NAVIGATION
+// ============================================================
+function goTo(view) {
+  S.view = view;
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
+  document.getElementById(`view-${view}`).classList.add('active');
+  document.querySelector(`.tab[onclick="goTo('${view}')"]`).classList.add('active');
+  document.getElementById('month-nav').style.display =
+    (view === 'tendencias' || view === 'inversiones') ? 'none' : 'flex';
+
+  if (view === 'resumen')       renderResumen();
+  if (view === 'transacciones') renderTxs();
+  if (view === 'presupuesto')   renderBudget();
+  if (view === 'tendencias')    { loadYear(); }
+  if (view === 'inversiones')   { loadInversiones(); }
+}
+
+function changeMonth(d) {
+  const [y, m] = S.mes.split('-').map(Number);
+  const nd = new Date(y, m - 1 + d, 1);
+  S.mes = fmt(nd.getFullYear(), nd.getMonth() + 1);
+  document.getElementById('month-lbl').textContent = mesLabel(S.mes);
+  loadMonth();
+}
+
+function changeYear(d) {
+  S.anio = String(parseInt(S.anio) + d);
+  document.getElementById('year-lbl').textContent = S.anio;
+  loadYear();
+}
+
+// ============================================================
+// DATA LOADING
+// ============================================================
+async function loadMonth() {
+  try {
+    const [txs, budget, md] = await Promise.all([
+      api('getTransacciones', S.mes),
+      api('getPresupuesto',   S.mes),
+      api('getMeDeben')
+    ]);
+    S.txs = txs; S.budget = budget; S.medeben = md;
+    if (S.view === 'resumen')       renderResumen();
+    if (S.view === 'transacciones') renderTxs();
+    if (S.view === 'presupuesto')   renderBudget();
+  } catch(e) { console.error(e); toast('Error cargando datos'); }
+}
+
+async function loadYear() {
+  document.getElementById('year-lbl').textContent = S.anio;
+  try {
+    S.trends = await api('getTransaccionesPorAnio', S.anio);
+    renderTendencias();
+  } catch(e) { console.error(e); }
+}
+
+// ============================================================
+// RENDER: RESUMEN
+// ============================================================
+function renderResumen() {
+  const egrs = S.txs.filter(t => t.tipo === 'egreso');
+  const ings = S.txs.filter(t => t.tipo === 'ingreso');
+  const totIng = ings.reduce((s,t) => s + Number(t.monto), 0);
+  const totEgr = egrs.reduce((s,t) => s + Number(t.monto), 0);
+  const bal = totIng - totEgr;
+
+  document.getElementById('r-ing').textContent = cop(totIng);
+  document.getElementById('r-egr').textContent = cop(totEgr);
+  const balEl = document.getElementById('r-bal');
+  balEl.textContent = cop(bal);
+  balEl.className = 'card-value ' + (bal >= 0 ? 'v-income' : 'v-expense');
+
+  // Alerts
+  const alerts = budgetAlerts(egrs);
+  const aEl = document.getElementById('r-alerts');
+  if (alerts.length) {
+    aEl.innerHTML = '<div class="sec">⚠ Alertas de Presupuesto</div>' +
+      alerts.map(a => `
+        <div class="alert ${a.pct >= 100 ? 'alert-danger' : 'alert-warn'}">
+          <span>${a.pct >= 100 ? '🚨' : '⚠️'}</span>
+          <span><b>${a.cat}</b> — ${Math.round(a.pct)}% ejecutado (${cop(a.ejec)} / ${cop(a.bud)})</span>
+        </div>`).join('');
+  } else { aEl.innerHTML = ''; }
+
+  // Categories
+  const byCat = {};
+  egrs.forEach(t => { byCat[t.categoria] = (byCat[t.categoria]||0) + Number(t.monto); });
+  const cats = Object.entries(byCat).sort((a,b) => b[1]-a[1]);
+  const catEl = document.getElementById('r-cats');
+  if (!cats.length) {
+    catEl.innerHTML = '<div class="empty"><div class="empty-icon">📊</div>Sin egresos</div>';
+  } else {
+    const max = cats[0][1];
+    catEl.innerHTML = cats.map(([cat, val]) => `
+      <div class="prog-item">
+        <div class="prog-row">
+          <span class="prog-cat">${cat}</span>
+          <span class="prog-amounts">${cop(val)}</span>
+        </div>
+        <div class="prog-track">
+          <div class="prog-fill f-safe" style="width:${(val/max*100).toFixed(1)}%"></div>
+        </div>
+      </div>`).join('');
+  }
+
+  // Por cuenta
+  const cuentaEl = document.getElementById('r-cuentas');
+  const txsConCuenta = S.txs.filter(t => t.cuenta);
+  if (!txsConCuenta.length) {
+    cuentaEl.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:2px 0">Sin datos por cuenta aún</div>';
+  } else {
+    const byCuenta = {};
+    S.txs.forEach(t => {
+      if (!t.cuenta) return;
+      if (!byCuenta[t.cuenta]) byCuenta[t.cuenta] = { ing: 0, egr: 0 };
+      if (t.tipo === 'ingreso') byCuenta[t.cuenta].ing += Number(t.monto);
+      if (t.tipo === 'egreso')  byCuenta[t.cuenta].egr += Number(t.monto);
+    });
+    cuentaEl.innerHTML = `<div class="grid2">` +
+      Object.entries(byCuenta).map(([cuenta, v]) => {
+        const bal = v.ing - v.egr;
+        return `<div class="card" style="margin-bottom:0">
+          <div class="card-label">${cuenta}</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:4px">Ingresos: <span style="color:var(--income)">${cop(v.ing)}</span></div>
+          <div style="font-size:11px;color:var(--muted)">Egresos: <span style="color:var(--expense)">${cop(v.egr)}</span></div>
+          <div style="font-weight:700;font-size:15px;margin-top:5px;color:${bal>=0?'var(--income)':'var(--expense)'}">${cop(bal)}</div>
+        </div>`;
+      }).join('') + `</div>`;
+  }
+
+  // Me deben pendiente
+  const pend = S.medeben.filter(m => m.estado === 'pendiente');
+  const mdEl = document.getElementById('r-medeben');
+  if (!pend.length) {
+    mdEl.innerHTML = '<div style="color:var(--muted);font-size:14px;padding:2px 0">Sin registros pendientes</div>';
+  } else {
+    const tot = pend.reduce((s,m) => s + Number(m.monto), 0);
+    mdEl.innerHTML = `<div class="card">
+      <div style="display:flex;justify-content:space-between;margin-bottom:10px">
+        <span style="font-size:13px;color:var(--muted)">${pend.length} pendiente(s)</span>
+        <span style="font-weight:700;color:var(--purple)">${cop(tot)}</span>
+      </div>
+      ${pend.slice(0,4).map(m => `
+        <div style="font-size:13.5px;padding:6px 0;border-bottom:1px solid var(--border)">
+          <b>${m.persona}</b> · ${m.descripcion} · <span style="color:var(--purple)">${cop(m.monto)}</span>
+        </div>`).join('')}
+      ${pend.length > 4 ? `<div style="font-size:12px;color:var(--muted);margin-top:6px">+${pend.length-4} más en Historial</div>` : ''}
+    </div>`;
+  }
+}
+
+function budgetAlerts(egrs) {
+  const byCat = {};
+  egrs.forEach(t => { byCat[t.categoria] = (byCat[t.categoria]||0) + Number(t.monto); });
+  return S.budget
+    .filter(b => b.monto > 0)
+    .map(b => ({ cat: b.categoria, ejec: byCat[b.categoria]||0, bud: Number(b.monto), pct: ((byCat[b.categoria]||0)/Number(b.monto))*100 }))
+    .filter(a => a.pct >= 80)
+    .sort((a,b) => b.pct - a.pct);
+}
+
+// ============================================================
+// RENDER: REGISTRAR
+// ============================================================
+function setType(t) {
+  S.rtype = t;
+  document.querySelectorAll('.type-tab').forEach((b,i) =>
+    b.classList.toggle('active', ['egreso','ingreso','medeben'][i] === t)
+  );
+  document.getElementById('f-tipo-g').style.display    = t === 'egreso'  ? '' : 'none';
+  document.getElementById('f-persona-g').style.display = t === 'medeben' ? '' : 'none';
+  document.getElementById('f-cat-g').style.display     = t === 'medeben' ? 'none' : '';
+  document.getElementById('f-cuenta-g').style.display  = t === 'medeben' ? 'none' : '';
+  const sel = document.getElementById('f-cat');
+  sel.innerHTML = (t === 'ingreso' ? CATS_INGRESO : CATS_EGRESO).map(c => `<option>${c}</option>`).join('');
+}
+
+function setCuenta(c) {
+  S.cuenta = c;
+  document.querySelectorAll('#cuenta-toggles .tog').forEach(b =>
+    b.classList.toggle('active', b.dataset.cuenta === c)
+  );
+}
+
+function setTipo(v) {
+  S.tgasto = v;
+  document.getElementById('t-fijo').classList.toggle('active', v === 'F');
+  document.getElementById('t-variable').classList.toggle('active', v === 'V');
+}
+
+async function registrar() {
+  const monto  = document.getElementById('f-monto').value;
+  const desc   = document.getElementById('f-desc').value.trim();
+  const fecha  = document.getElementById('f-fecha').value;
+  if (!monto || !desc || !fecha) { toast('Completa todos los campos'); return; }
+
+  const btn = document.getElementById('btn-reg');
+  btn.disabled = true;
+  try {
+    if (S.rtype === 'medeben') {
+      const persona = document.getElementById('f-persona').value.trim();
+      if (!persona) { toast('Ingresa el nombre de la persona'); btn.disabled=false; return; }
+      await api('addMeDeben', { fecha, persona, descripcion: desc, monto: Number(monto) });
+    } else {
+      await api('addTransaccion', {
+        fecha, tipo: S.rtype,
+        descripcion: desc,
+        categoria: document.getElementById('f-cat').value,
+        monto: Number(monto),
+        tipo_gasto: S.rtype === 'egreso' ? S.tgasto : '',
+        cuenta: S.cuenta
+      });
+    }
+    document.getElementById('f-monto').value = '';
+    document.getElementById('f-desc').value  = '';
+    toast('Registrado ✓');
+    await loadMonth();
+  } catch(e) { toast('Error al registrar'); console.error(e); }
+  btn.disabled = false;
+}
+
+// ============================================================
+// RENDER: HISTORIAL
+// ============================================================
+function setFiltro(f) {
+  S.filtro = f;
+  document.querySelectorAll('.chip').forEach(c =>
+    c.classList.toggle('active', c.getAttribute('onclick') === `setFiltro('${f}')`)
+  );
+  renderTxs();
+}
+
+function renderTxs() {
+  let items;
+  if (S.filtro === 'medeben') {
+    items = S.medeben.map(m => ({ ...m, tipo: 'medeben', categoria: 'Me Deben', tipo_gasto: '' }));
+  } else {
+    items = [...S.txs];
+    const cuentaFiltros = ['Ahorros','Efectivo','AFC'];
+    if (S.filtro === 'F' || S.filtro === 'V') items = items.filter(t => t.tipo_gasto === S.filtro);
+    else if (cuentaFiltros.includes(S.filtro)) items = items.filter(t => t.cuenta && t.cuenta.includes(S.filtro));
+    else if (S.filtro !== 'todos') items = items.filter(t => t.tipo === S.filtro);
+  }
+  items.sort((a,b) => String(b.fecha).localeCompare(String(a.fecha)));
+
+  const el = document.getElementById('tx-list');
+  if (!items.length) {
+    el.innerHTML = '<div class="empty"><div class="empty-icon">📋</div>Sin registros</div>';
+    return;
+  }
+  el.innerHTML = items.map(t => {
+    const isMd = t.tipo === 'medeben';
+    const isIn = t.tipo === 'ingreso';
+    const dotCls = isMd ? 'dot-md' : (isIn ? 'dot-in' : 'dot-out');
+    const amtStyle = isMd ? 'color:var(--purple)' : (isIn ? 'color:var(--income)' : 'color:var(--expense)');
+    const sign = isIn ? '+' : (isMd ? '' : '-');
+    const cuentaTag = t.cuenta ? ` · ${t.cuenta}` : '';
+    const meta = isMd
+      ? `${t.fecha} · ${t.estado === 'pendiente' ? '⏳ Pendiente' : '✓ Cobrado'}`
+      : `${t.categoria}${t.tipo_gasto ? ` · ${t.tipo_gasto==='F'?'Fijo':'Variable'}` : ''}${cuentaTag} · ${t.fecha}`;
+    const extra = isMd && t.estado === 'pendiente'
+      ? `<button class="md-cobrar" onclick="cobrar('${t.id}')">Cobrado ✓</button>`
+      : '';
+    return `
+      <div class="tx">
+        <div class="dot ${dotCls}"></div>
+        <div class="tx-info">
+          <div class="tx-desc">${isMd ? t.persona+': '+t.descripcion : t.descripcion}</div>
+          <div class="tx-meta">${meta}</div>
+        </div>
+        ${extra}
+        <div class="tx-amt" style="${amtStyle}">${sign}${cop(t.monto)}</div>
+        <button class="tx-del" onclick="eliminar('${t.id}','${t.tipo}')">×</button>
+      </div>`;
+  }).join('');
+}
+
+async function eliminar(id, tipo) {
+  if (!confirm('¿Eliminar este registro?')) return;
+  try {
+    await api(tipo === 'medeben' ? 'deleteMeDeben' : 'deleteTransaccion', id);
+    toast('Eliminado');
+    await loadMonth();
+  } catch(e) { toast('Error'); }
+}
+
+async function cobrar(id) {
+  try {
+    await api('updateMeDebenEstado', id, 'cobrado');
+    toast('Marcado como cobrado ✓');
+    S.medeben = await api('getMeDeben');
+    renderTxs();
+    if (S.view === 'resumen') renderResumen();
+  } catch(e) { toast('Error'); }
+}
+
+// ============================================================
+// RENDER: PRESUPUESTO
+// ============================================================
+function renderBudget() {
+  const byCat = {};
+  S.txs.filter(t => t.tipo === 'egreso').forEach(t => {
+    byCat[t.categoria] = (byCat[t.categoria]||0) + Number(t.monto);
+  });
+
+  const el    = document.getElementById('bud-list');
+  const sumEl = document.getElementById('bud-summary');
+  document.getElementById('btn-copy-prev').style.display = S.budget.length ? 'none' : '';
+
+  if (S.budget.length) {
+    const totalBud  = S.budget.reduce((s, b) => s + Number(b.monto), 0);
+    const totalEjec = S.budget.reduce((s, b) => s + (byCat[b.categoria]||0), 0);
+    const totalDisp = totalBud - totalEjec;
+    const totalPct  = totalBud > 0 ? (totalEjec / totalBud) * 100 : 0;
+    const sumFc     = totalPct >= 100 ? 'f-danger' : totalPct >= 80 ? 'f-warn' : 'f-safe';
+    const dispColor = totalDisp >= 0 ? 'var(--income)' : 'var(--expense)';
+    const dispLabel = totalDisp >= 0 ? 'Disponible' : 'Excedido';
+
+    sumEl.innerHTML = `
+      <div class="card" style="margin-bottom:12px">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <span style="font-weight:700;font-size:15px">Comparativo del Mes</span>
+          <span style="font-size:13px;font-weight:600;color:${totalPct>=100?'var(--expense)':totalPct>=80?'#D97706':'var(--muted)'}">${Math.round(totalPct)}% ejecutado</span>
+        </div>
+        <div class="bud-summary-bar">
+          <div class="prog-fill ${sumFc}" style="width:${Math.min(totalPct,100).toFixed(1)}%"></div>
+        </div>
+        <div class="bud-compare" style="padding-top:0;border-top:none">
+          <div class="bud-col" style="background:#F9FAFB;border-radius:10px;padding:10px 4px">
+            <div class="bud-col-label">Presupuestado</div>
+            <div class="bud-col-val">${cop(totalBud)}</div>
+          </div>
+          <div class="bud-col" style="background:#FEF2F2;border-radius:10px;padding:10px 4px">
+            <div class="bud-col-label">Ejecutado</div>
+            <div class="bud-col-val" style="color:var(--expense)">${cop(totalEjec)}</div>
+          </div>
+          <div class="bud-col" style="background:${totalDisp>=0?'#F0FDF4':'#FEF2F2'};border-radius:10px;padding:10px 4px">
+            <div class="bud-col-label">${dispLabel}</div>
+            <div class="bud-col-val" style="color:${dispColor}">${cop(Math.abs(totalDisp))}</div>
+          </div>
+        </div>
+      </div>`;
+  } else {
+    sumEl.innerHTML = '';
+  }
+
+  if (!S.budget.length) {
+    el.innerHTML = '<div class="empty" style="padding:20px"><div class="empty-icon">💰</div>Sin presupuesto configurado</div>';
+  } else {
+    el.innerHTML = S.budget.map(b => {
+      const ejec  = byCat[b.categoria]||0;
+      const bud   = Number(b.monto);
+      const disp  = bud - ejec;
+      const pct   = bud > 0 ? (ejec/bud)*100 : 0;
+      const fc    = pct >= 100 ? 'f-danger' : pct >= 80 ? 'f-warn' : pct >= 60 ? 'f-mid' : 'f-safe';
+      const icon  = pct >= 100 ? '🚨 ' : pct >= 80 ? '⚠️ ' : '';
+      const key   = b.categoria.replace(/[\s&]/g,'_');
+      const dispColor = disp >= 0 ? 'var(--income)' : 'var(--expense)';
+      const dispLabel = disp >= 0 ? 'Disponible' : 'Excedido';
+
+      return `
+        <div class="prog-item">
+          <div class="prog-row">
+            <span class="prog-cat">${icon}${b.categoria}</span>
+            <span style="font-size:12px;font-weight:600;color:${pct>=100?'var(--expense)':pct>=80?'#D97706':'var(--muted)'}">${Math.round(pct)}%</span>
+          </div>
+          <div class="prog-track">
+            <div class="prog-fill ${fc}" style="width:${Math.min(pct,100).toFixed(1)}%"></div>
+          </div>
+          <div class="bud-compare">
+            <div class="bud-col">
+              <div class="bud-col-label">Presupuesto</div>
+              <div class="bud-col-val">${cop(bud)}</div>
+            </div>
+            <div class="bud-col">
+              <div class="bud-col-label">Ejecutado</div>
+              <div class="bud-col-val" style="color:var(--expense)">${cop(ejec)}</div>
+            </div>
+            <div class="bud-col">
+              <div class="bud-col-label">${dispLabel}</div>
+              <div class="bud-col-val" style="color:${dispColor}">${cop(Math.abs(disp))}</div>
+            </div>
+          </div>
+          <div class="bud-row">
+            <input type="number" id="be-${key}" placeholder="Actualizar presupuesto" inputmode="numeric">
+            <button class="btn-save" onclick="updateBud('${b.categoria}')">Guardar</button>
+            <button class="btn-del"  onclick="deleteBud('${b.categoria}')">×</button>
+          </div>
+        </div>`;
+    }).join('');
+  }
+
+  const used = S.budget.map(b => b.categoria);
+  document.getElementById('bud-new-cat').innerHTML =
+    CATS_EGRESO.filter(c => !used.includes(c)).map(c => `<option>${c}</option>`).join('');
+}
+
+function toggleAddBud() {
+  const card = document.getElementById('bud-add-card');
+  card.style.display = card.style.display === 'none' ? '' : 'none';
+}
+
+async function addBudget() {
+  const cat  = document.getElementById('bud-new-cat').value;
+  const val  = document.getElementById('bud-new-val').value;
+  if (!cat || !val) { toast('Completa los campos'); return; }
+  try {
+    await api('setPresupuesto', S.mes, cat, Number(val));
+    document.getElementById('bud-new-val').value = '';
+    document.getElementById('bud-add-card').style.display = 'none';
+    S.budget = await api('getPresupuesto', S.mes);
+    renderBudget();
+    toast('Guardado ✓');
+  } catch(e) { alert('Error al guardar presupuesto:\n' + (e.message || JSON.stringify(e))); }
+}
+
+async function updateBud(cat) {
+  const key = cat.replace(/[\s&]/g,'_');
+  const val = document.getElementById(`be-${key}`).value;
+  if (!val) { toast('Ingresa el monto'); return; }
+  try {
+    await api('setPresupuesto', S.mes, cat, Number(val));
+    S.budget = await api('getPresupuesto', S.mes);
+    renderBudget();
+    toast('Actualizado ✓');
+  } catch(e) { alert('Error al actualizar:\n' + (e.message || JSON.stringify(e))); }
+}
+
+async function deleteBud(cat) {
+  if (!confirm(`¿Eliminar presupuesto de "${cat}"?`)) return;
+  try {
+    await api('deletePresupuesto', S.mes, cat);
+    S.budget = await api('getPresupuesto', S.mes);
+    renderBudget();
+    toast('Eliminado');
+  } catch(e) { alert('Error al eliminar:\n' + (e.message || JSON.stringify(e))); }
+}
+
+async function copiarPrev() {
+  try {
+    const r = await api('copiarPresupuestoMesAnterior', S.mes);
+    if (!r.success) { toast(r.message || 'Sin datos del mes anterior'); return; }
+    S.budget = await api('getPresupuesto', S.mes);
+    renderBudget();
+    toast(`${r.count} categorías copiadas ✓`);
+  } catch(e) { alert('Error al copiar:\n' + (e.message || JSON.stringify(e))); }
+}
+
+// ============================================================
+// RENDER: TENDENCIAS
+// ============================================================
+function renderTendencias() {
+  const MK = ['01','02','03','04','05','06','07','08','09','10','11','12'];
+  const byM = {};
+  MK.forEach(m => { byM[m] = { ing: 0, egr: 0 }; });
+  S.trends.forEach(t => {
+    const m = String(t.fecha).substring(5,7);
+    if (!byM[m]) return;
+    if (t.tipo === 'ingreso') byM[m].ing += Number(t.monto);
+    if (t.tipo === 'egreso')  byM[m].egr += Number(t.monto);
+  });
+
+  const ingData = MK.map(m => byM[m].ing);
+  const egrData = MK.map(m => byM[m].egr);
+
+  if (S.chart) S.chart.destroy();
+  S.chart = new Chart(document.getElementById('trend-chart').getContext('2d'), {
+    type: 'bar',
+    data: {
+      labels: MESES_CORTOS,
+      datasets: [
+        { label: 'Ingresos', data: ingData, backgroundColor: '#34D399', borderRadius: 4 },
+        { label: 'Egresos',  data: egrData, backgroundColor: '#F87171', borderRadius: 4 }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: 'top', labels: { font: { size: 12 } } } },
+      scales: {
+        y: { ticks: { callback: v => v >= 1e6 ? (v/1e6).toFixed(1)+'M' : v >= 1000 ? (v/1000).toFixed(0)+'k' : v } }
+      }
+    }
+  });
+
+  const totIng = ingData.reduce((s,v) => s+v, 0);
+  const totEgr = egrData.reduce((s,v) => s+v, 0);
+  const mesesConData = MK.filter(m => byM[m].ing > 0 || byM[m].egr > 0).length || 1;
+  const bal = totIng - totEgr;
+
+  document.getElementById('year-stats').innerHTML = [
+    { label: 'Total Ingresos',     val: cop(totIng), color: 'var(--income)' },
+    { label: 'Total Egresos',      val: cop(totEgr), color: 'var(--expense)' },
+    { label: 'Balance del Año',    val: cop(bal),    color: bal >= 0 ? 'var(--income)' : 'var(--expense)' },
+    { label: 'Promedio Mensual',   val: cop(totEgr/mesesConData), color: 'var(--text)' }
+  ].map(s => `
+    <div class="stat-box">
+      <div class="stat-label">${s.label}</div>
+      <div class="stat-val" style="color:${s.color}">${s.val}</div>
+    </div>`).join('');
+
+  const catTot = {}, catMonths = {};
+  S.trends.filter(t => t.tipo === 'egreso').forEach(t => {
+    const m = String(t.fecha).substring(5,7);
+    catTot[t.categoria]    = (catTot[t.categoria]||0) + Number(t.monto);
+    catMonths[t.categoria] = catMonths[t.categoria] || new Set();
+    catMonths[t.categoria].add(m);
+  });
+  const sorted = Object.entries(catTot)
+    .map(([cat, tot]) => ({ cat, tot, avg: tot / catMonths[cat].size }))
+    .sort((a,b) => b.tot - a.tot);
+
+  const avgEl = document.getElementById('cat-avg');
+  if (!sorted.length) {
+    avgEl.innerHTML = '<div style="color:var(--muted);font-size:14px">Sin datos de egresos</div>';
+  } else {
+    avgEl.innerHTML = `
+      <table class="avg-table">
+        <thead><tr><th>Categoría</th><th>Promedio/mes</th><th>Total año</th></tr></thead>
+        <tbody>
+          ${sorted.map(r => `
+            <tr>
+              <td>${r.cat}</td>
+              <td style="color:var(--expense)">${cop(r.avg)}</td>
+              <td style="color:var(--muted)">${cop(r.tot)}</td>
+            </tr>`).join('')}
+        </tbody>
+      </table>`;
+  }
+}
+
+// ============================================================
+// INIT
+// ============================================================
+function init() {
+  document.getElementById('month-lbl').textContent = mesLabel(S.mes);
+  document.getElementById('year-lbl').textContent  = S.anio;
+
+  const t = new Date();
+  document.getElementById('f-fecha').value =
+    `${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')}`;
+
+  document.getElementById('cuenta-toggles').innerHTML = CUENTAS.map(c =>
+    `<button class="tog${c === S.cuenta ? ' active' : ''}" data-cuenta="${c}" onclick="setCuenta('${c}')">${c}</button>`
+  ).join('');
+
+  setType('egreso');
+  document.getElementById('view-resumen').classList.add('active');
+  loadMonth();
+}
+
+window.addEventListener('load', init);
+</script>
