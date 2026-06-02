@@ -3,9 +3,10 @@
 // ============================================================
 
 const SHEETS = {
-  TX:      { name: 'Transacciones', headers: ['id','fecha','tipo','descripcion','categoria','monto','tipo_gasto','cuenta'] },
-  BUDGET:  { name: 'Presupuesto',   headers: ['mes','categoria','monto'] },
-  MEDEBEN: { name: 'Me_Deben',      headers: ['id','fecha','persona','descripcion','monto','estado'] }
+  TX:         { name: 'Transacciones', headers: ['id','fecha','tipo','descripcion','categoria','monto','tipo_gasto','cuenta'] },
+  BUDGET:     { name: 'Presupuesto',   headers: ['mes','categoria','monto'] },
+  MEDEBEN:    { name: 'Me_Deben',      headers: ['id','fecha','persona','descripcion','monto','tasa','estado'] },
+  INVERSIONES:{ name: 'Inversiones',   headers: ['id','fecha','tipo','nombre','moneda','cantidad','precio_entrada','valor_cop_entrada','tasa','fecha_cierre','precio_cierre','valor_cop_cierre','estado','nota'] }
 };
 
 function doGet() {
@@ -138,7 +139,7 @@ function getMeDeben() {
 
 function addMeDeben(data) {
   const id = Utilities.getUuid();
-  getSheet('MEDEBEN').appendRow([id, data.fecha, data.persona, data.descripcion, Number(data.monto), 'pendiente']);
+  getSheet('MEDEBEN').appendRow([id, data.fecha, data.persona, data.descripcion, Number(data.monto), Number(data.tasa || 0), 'pendiente']);
   return { success: true, id };
 }
 
@@ -158,6 +159,90 @@ function deleteMeDeben(id) {
     if (values[i][0] === id) { sheet.deleteRow(i + 1); return { success: true }; }
   }
   return { success: false };
+}
+
+// ---- Inversiones ----
+
+function getInversiones() {
+  return sheetToObjects(getSheet('INVERSIONES'));
+}
+
+function addInversion(data) {
+  const id = Utilities.getUuid();
+  getSheet('INVERSIONES').appendRow([
+    id, data.fecha, data.tipo, data.nombre,
+    data.moneda || 'COP', Number(data.cantidad),
+    Number(data.precio_entrada), Number(data.valor_cop_entrada),
+    Number(data.tasa || 0),
+    '', '', '', 'abierta', data.nota || ''
+  ]);
+  return { success: true, id };
+}
+
+function cerrarInversion(id, datos) {
+  const sheet = getSheet('INVERSIONES');
+  const values = sheet.getDataRange().getValues();
+  const h = values[0];
+  for (let i = 1; i < values.length; i++) {
+    if (values[i][0] === id) {
+      const r = i + 1;
+      sheet.getRange(r, h.indexOf('fecha_cierre') + 1).setValue(datos.fecha_cierre);
+      sheet.getRange(r, h.indexOf('precio_cierre') + 1).setValue(Number(datos.precio_cierre || 0));
+      sheet.getRange(r, h.indexOf('valor_cop_cierre') + 1).setValue(Number(datos.valor_cop_cierre));
+      sheet.getRange(r, h.indexOf('estado') + 1).setValue('cerrada');
+      return { success: true };
+    }
+  }
+  return { success: false };
+}
+
+function deleteInversion(id) {
+  const sheet = getSheet('INVERSIONES');
+  const values = sheet.getDataRange().getValues();
+  for (let i = 1; i < values.length; i++) {
+    if (values[i][0] === id) { sheet.deleteRow(i + 1); return { success: true }; }
+  }
+  return { success: false };
+}
+
+function getPrecioActual(tipo, nombre, moneda) {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    let cache = ss.getSheetByName('_cache_');
+    if (!cache) { cache = ss.insertSheet('_cache_'); cache.hideSheet(); }
+
+    if (tipo === 'divisa') {
+      const sym = moneda === 'EUR' ? 'EURCOP' : 'USDCOP';
+      cache.getRange('A1').setFormula(`=GOOGLEFINANCE("CURRENCY:${sym}")`);
+      SpreadsheetApp.flush(); Utilities.sleep(2500);
+      const v = cache.getRange('A1').getValue();
+      cache.getRange('A1').clearContent();
+      return typeof v === 'number' ? { tasa: v } : null;
+    }
+    if (tipo === 'accion_nacional') {
+      cache.getRange('A1').setFormula(`=GOOGLEFINANCE("${nombre}","price")`);
+      SpreadsheetApp.flush(); Utilities.sleep(2500);
+      const v = cache.getRange('A1').getValue();
+      cache.getRange('A1').clearContent();
+      return typeof v === 'number' ? { precio: v } : null;
+    }
+    if (tipo === 'accion_internacional') {
+      cache.getRange('A1').setFormula(`=GOOGLEFINANCE("${nombre}","price")`);
+      cache.getRange('A2').setFormula('=GOOGLEFINANCE("CURRENCY:USDCOP")');
+      SpreadsheetApp.flush(); Utilities.sleep(3000);
+      const precio = cache.getRange('A1').getValue();
+      const tasa   = cache.getRange('A2').getValue();
+      cache.getRange('A1:A2').clearContent();
+      if (typeof precio === 'number' && typeof tasa === 'number') {
+        return { precioUSD: precio, tasaCOP: tasa, precioCOP: precio * tasa };
+      }
+      return null;
+    }
+    return null;
+  } catch(e) {
+    Logger.log('getPrecioActual: ' + e.message);
+    return null;
+  }
 }
 
 // ---- Diagnóstico (correr desde el editor para verificar que todo funciona) ----
