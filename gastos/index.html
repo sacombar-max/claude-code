@@ -221,6 +221,7 @@
     }
     .inv-header { display: flex; justify-content: space-between; align-items: flex-start; }
     .inv-title  { font-weight: 600; font-size: 15px; }
+    .inv-ticker { font-size: 11px; color: var(--muted); font-family: monospace; margin-top: 1px; }
     .inv-sub    { font-size: 12px; color: var(--muted); margin-top: 2px; }
     .inv-badge  {
       font-size: 11px; font-weight: 600; padding: 3px 8px;
@@ -246,6 +247,17 @@
     .informe-total { font-weight: 700; background: var(--bg); border-radius: 8px; padding: 10px; margin-top: 8px; }
     .gain-pos { color: var(--income); }
     .gain-neg { color: var(--expense); }
+    /* Portfolio group tabs */
+    .inv-group-tabs { display: flex; background: var(--bg); border-radius: 10px; padding: 3px; margin-bottom: 14px; overflow-x: auto; scrollbar-width: none; }
+    .inv-group-tabs::-webkit-scrollbar { display: none; }
+    .inv-gtab {
+      flex: 1; padding: 8px 6px; border: none; background: none; border-radius: 8px;
+      font-size: 12px; font-weight: 500; cursor: pointer; color: var(--muted); transition: all .2s; white-space: nowrap;
+    }
+    .inv-gtab.active { background: #fff; color: var(--text); box-shadow: 0 1px 3px rgba(0,0,0,.1); }
+    /* US ticker search */
+    .ticker-search { margin-bottom: 6px; }
+    .ticker-search input { font-size: 14px; }
   </style>
 </head>
 <body>
@@ -460,6 +472,150 @@ const CUENTAS = ['Cuenta de Ahorros','Efectivo','AFC'];
 const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 const MESES_CORTOS = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
 
+// ── Tickers BVC (COLCAP) ──
+const TICKERS_BVC = [
+  { ticker:'BVC:ECOPETL',    nombre:'Ecopetrol',           sector:'Energía'    },
+  { ticker:'BVC:PFBCOLOM',   nombre:'Bancolombia Pref',    sector:'Financiero' },
+  { ticker:'BVC:BCOLOMBIA',  nombre:'Bancolombia Ord',     sector:'Financiero' },
+  { ticker:'BVC:GRUPOSURA',  nombre:'Grupo Sura Ord',      sector:'Financiero' },
+  { ticker:'BVC:PFGRUPSURA', nombre:'Grupo Sura Pref',     sector:'Financiero' },
+  { ticker:'BVC:NUTRESA',    nombre:'Grupo Nutresa',       sector:'Consumo'    },
+  { ticker:'BVC:ISA',        nombre:'ISA',                 sector:'Utilities'  },
+  { ticker:'BVC:GRUPOARGOS', nombre:'Grupo Argos Ord',     sector:'Industrial' },
+  { ticker:'BVC:PFGRUPOARG', nombre:'Grupo Argos Pref',    sector:'Industrial' },
+  { ticker:'BVC:CELSIA',     nombre:'Celsia',              sector:'Utilities'  },
+  { ticker:'BVC:CNEC',       nombre:'Canacol Energy',      sector:'Energía'    },
+  { ticker:'BVC:BOGOTA',     nombre:'Banco de Bogotá',     sector:'Financiero' },
+  { ticker:'BVC:CORFICOLCF', nombre:'Corficolombiana',     sector:'Financiero' },
+  { ticker:'BVC:CEMARGOS',   nombre:'Cementos Argos',      sector:'Industrial' },
+  { ticker:'BVC:PFDAVVNDA',  nombre:'Davivienda Pref',     sector:'Financiero' },
+  { ticker:'BVC:MINEROS',    nombre:'Mineros',             sector:'Materiales' },
+  { ticker:'BVC:CLH',        nombre:'Cemex Latam',         sector:'Industrial' },
+  { ticker:'BVC:ETB',        nombre:'ETB',                 sector:'Telecom'    },
+  { ticker:'BVC:PROMIGAS',   nombre:'Promigas',            sector:'Energía'    },
+  { ticker:'BVC:ICAP',       nombre:'iCOLCAP ETF',         sector:'ETF'        },
+];
+
+// ── Tickers NYSE / NASDAQ ──
+const TICKERS_US = [
+  // Tecnología
+  { ticker:'AAPL',  nombre:'Apple',              sector:'Tecnología'  },
+  { ticker:'MSFT',  nombre:'Microsoft',          sector:'Tecnología'  },
+  { ticker:'NVDA',  nombre:'Nvidia',             sector:'Tecnología'  },
+  { ticker:'GOOGL', nombre:'Alphabet Cl A',      sector:'Tecnología'  },
+  { ticker:'GOOG',  nombre:'Alphabet Cl C',      sector:'Tecnología'  },
+  { ticker:'META',  nombre:'Meta Platforms',     sector:'Tecnología'  },
+  { ticker:'AMZN',  nombre:'Amazon',             sector:'Tecnología'  },
+  { ticker:'TSLA',  nombre:'Tesla',              sector:'Tecnología'  },
+  { ticker:'AMD',   nombre:'Advanced Micro Dev', sector:'Tecnología'  },
+  { ticker:'INTC',  nombre:'Intel',              sector:'Tecnología'  },
+  { ticker:'AVGO',  nombre:'Broadcom',           sector:'Tecnología'  },
+  { ticker:'QCOM',  nombre:'Qualcomm',           sector:'Tecnología'  },
+  { ticker:'TXN',   nombre:'Texas Instruments',  sector:'Tecnología'  },
+  { ticker:'ORCL',  nombre:'Oracle',             sector:'Tecnología'  },
+  { ticker:'ADBE',  nombre:'Adobe',              sector:'Tecnología'  },
+  { ticker:'CRM',   nombre:'Salesforce',         sector:'Tecnología'  },
+  { ticker:'NOW',   nombre:'ServiceNow',         sector:'Tecnología'  },
+  { ticker:'INTU',  nombre:'Intuit',             sector:'Tecnología'  },
+  { ticker:'AMAT',  nombre:'Applied Materials',  sector:'Tecnología'  },
+  { ticker:'MU',    nombre:'Micron Technology',  sector:'Tecnología'  },
+  { ticker:'SHOP',  nombre:'Shopify',            sector:'Tecnología'  },
+  { ticker:'PYPL',  nombre:'PayPal',             sector:'Tecnología'  },
+  { ticker:'UBER',  nombre:'Uber',               sector:'Tecnología'  },
+  { ticker:'ABNB',  nombre:'Airbnb',             sector:'Tecnología'  },
+  { ticker:'NFLX',  nombre:'Netflix',            sector:'Tecnología'  },
+  // Salud
+  { ticker:'JNJ',   nombre:'Johnson & Johnson',  sector:'Salud'       },
+  { ticker:'LLY',   nombre:'Eli Lilly',          sector:'Salud'       },
+  { ticker:'UNH',   nombre:'UnitedHealth',       sector:'Salud'       },
+  { ticker:'ABBV',  nombre:'AbbVie',             sector:'Salud'       },
+  { ticker:'MRK',   nombre:'Merck',              sector:'Salud'       },
+  { ticker:'PFE',   nombre:'Pfizer',             sector:'Salud'       },
+  { ticker:'AMGN',  nombre:'Amgen',              sector:'Salud'       },
+  { ticker:'GILD',  nombre:'Gilead Sciences',    sector:'Salud'       },
+  { ticker:'MRNA',  nombre:'Moderna',            sector:'Salud'       },
+  { ticker:'VRTX',  nombre:'Vertex Pharma',      sector:'Salud'       },
+  { ticker:'BMY',   nombre:'Bristol-Myers',      sector:'Salud'       },
+  { ticker:'CVS',   nombre:'CVS Health',         sector:'Salud'       },
+  // Financiero
+  { ticker:'JPM',   nombre:'JPMorgan Chase',     sector:'Financiero'  },
+  { ticker:'BAC',   nombre:'Bank of America',    sector:'Financiero'  },
+  { ticker:'WFC',   nombre:'Wells Fargo',        sector:'Financiero'  },
+  { ticker:'GS',    nombre:'Goldman Sachs',      sector:'Financiero'  },
+  { ticker:'MS',    nombre:'Morgan Stanley',     sector:'Financiero'  },
+  { ticker:'C',     nombre:'Citigroup',          sector:'Financiero'  },
+  { ticker:'BLK',   nombre:'BlackRock',          sector:'Financiero'  },
+  { ticker:'SCHW',  nombre:'Charles Schwab',     sector:'Financiero'  },
+  { ticker:'AXP',   nombre:'American Express',   sector:'Financiero'  },
+  { ticker:'V',     nombre:'Visa',               sector:'Financiero'  },
+  { ticker:'MA',    nombre:'Mastercard',         sector:'Financiero'  },
+  { ticker:'BRK-B', nombre:'Berkshire B',        sector:'Financiero'  },
+  // Consumo
+  { ticker:'WMT',   nombre:'Walmart',            sector:'Consumo'     },
+  { ticker:'COST',  nombre:'Costco',             sector:'Consumo'     },
+  { ticker:'TGT',   nombre:'Target',             sector:'Consumo'     },
+  { ticker:'HD',    nombre:'Home Depot',         sector:'Consumo'     },
+  { ticker:'LOW',   nombre:'Lowe\'s',            sector:'Consumo'     },
+  { ticker:'MCD',   nombre:'McDonald\'s',        sector:'Consumo'     },
+  { ticker:'SBUX',  nombre:'Starbucks',          sector:'Consumo'     },
+  { ticker:'NKE',   nombre:'Nike',               sector:'Consumo'     },
+  { ticker:'PG',    nombre:'Procter & Gamble',   sector:'Consumo'     },
+  { ticker:'KO',    nombre:'Coca-Cola',          sector:'Consumo'     },
+  { ticker:'PEP',   nombre:'PepsiCo',            sector:'Consumo'     },
+  { ticker:'PM',    nombre:'Philip Morris',      sector:'Consumo'     },
+  { ticker:'DIS',   nombre:'Disney',             sector:'Consumo'     },
+  // Energía
+  { ticker:'XOM',   nombre:'Exxon Mobil',        sector:'Energía'     },
+  { ticker:'CVX',   nombre:'Chevron',            sector:'Energía'     },
+  { ticker:'COP',   nombre:'ConocoPhillips',     sector:'Energía'     },
+  { ticker:'EOG',   nombre:'EOG Resources',      sector:'Energía'     },
+  { ticker:'SLB',   nombre:'Schlumberger',       sector:'Energía'     },
+  { ticker:'OXY',   nombre:'Occidental',         sector:'Energía'     },
+  { ticker:'PSX',   nombre:'Phillips 66',        sector:'Energía'     },
+  { ticker:'VLO',   nombre:'Valero Energy',      sector:'Energía'     },
+  // Industrial
+  { ticker:'BA',    nombre:'Boeing',             sector:'Industrial'  },
+  { ticker:'CAT',   nombre:'Caterpillar',        sector:'Industrial'  },
+  { ticker:'DE',    nombre:'John Deere',         sector:'Industrial'  },
+  { ticker:'HON',   nombre:'Honeywell',          sector:'Industrial'  },
+  { ticker:'GE',    nombre:'GE Aerospace',       sector:'Industrial'  },
+  { ticker:'RTX',   nombre:'RTX Corp',           sector:'Industrial'  },
+  { ticker:'LMT',   nombre:'Lockheed Martin',    sector:'Industrial'  },
+  { ticker:'NOC',   nombre:'Northrop Grumman',   sector:'Industrial'  },
+  { ticker:'UPS',   nombre:'UPS',                sector:'Industrial'  },
+  { ticker:'FDX',   nombre:'FedEx',              sector:'Industrial'  },
+  // Utilities / Real Estate
+  { ticker:'NEE',   nombre:'NextEra Energy',     sector:'Utilities'   },
+  { ticker:'DUK',   nombre:'Duke Energy',        sector:'Utilities'   },
+  { ticker:'SO',    nombre:'Southern Co',        sector:'Utilities'   },
+  { ticker:'AMT',   nombre:'American Tower',     sector:'Real Estate' },
+  { ticker:'PLD',   nombre:'Prologis',           sector:'Real Estate' },
+  // ETFs
+  { ticker:'SPY',   nombre:'S&P 500 (SPDR)',     sector:'ETF'         },
+  { ticker:'QQQ',   nombre:'Nasdaq 100',         sector:'ETF'         },
+  { ticker:'IVV',   nombre:'S&P 500 (iShares)',  sector:'ETF'         },
+  { ticker:'VTI',   nombre:'Total Market (VG)',  sector:'ETF'         },
+  { ticker:'VOO',   nombre:'S&P 500 (VG)',       sector:'ETF'         },
+  { ticker:'VEA',   nombre:'Developed Mkts VG',  sector:'ETF'         },
+  { ticker:'VWO',   nombre:'Emerging Mkts VG',   sector:'ETF'         },
+  { ticker:'EEM',   nombre:'Emerging Mkts iSh',  sector:'ETF'         },
+  { ticker:'EWZ',   nombre:'Brazil ETF',         sector:'ETF'         },
+  { ticker:'ILF',   nombre:'Latin America 40',   sector:'ETF'         },
+  { ticker:'GLD',   nombre:'Gold (SPDR)',         sector:'ETF'         },
+  { ticker:'SLV',   nombre:'Silver (iShares)',    sector:'ETF'         },
+  { ticker:'TLT',   nombre:'20yr Treasury',      sector:'ETF'         },
+  { ticker:'HYG',   nombre:'High Yield Bond',    sector:'ETF'         },
+  { ticker:'XLF',   nombre:'Financials SPDR',    sector:'ETF'         },
+  { ticker:'XLK',   nombre:'Technology SPDR',    sector:'ETF'         },
+  { ticker:'XLE',   nombre:'Energy SPDR',        sector:'ETF'         },
+  { ticker:'XLV',   nombre:'Healthcare SPDR',    sector:'ETF'         },
+  { ticker:'XLU',   nombre:'Utilities SPDR',     sector:'ETF'         },
+  { ticker:'SOXX',  nombre:'Semiconductors',     sector:'ETF'         },
+  { ticker:'SMH',   nombre:'Semiconductors VG',  sector:'ETF'         },
+  { ticker:'ARKK',  nombre:'ARK Innovation',     sector:'ETF'         },
+  { ticker:'MCHI',  nombre:'China iShares',      sector:'ETF'         },
+];
+
 // ============================================================
 // STATE
 // ============================================================
@@ -474,6 +630,7 @@ const S = {
   trends:      [],
   inversiones: [],
   invView:     'portafolio',
+  invTab:      'colombia',
   invAnio:     String(now.getFullYear()),
   rtype:       'egreso',
   tgasto:      'F',
@@ -1077,6 +1234,33 @@ function setInvView(v) {
   if (v === 'informe')    renderInformeAnual();
 }
 
+const TAB_TIPOS = {
+  colombia: ['accion_nacional'],
+  eeuu:     ['accion_internacional'],
+  divisas:  ['divisa'],
+  prestamos:['prestamo']
+};
+
+function tickerNombre(ticker, tipo) {
+  if (tipo === 'accion_nacional') {
+    const t = TICKERS_BVC.find(t => t.ticker === ticker);
+    return t ? t.nombre : ticker;
+  }
+  if (tipo === 'accion_internacional') {
+    const t = TICKERS_US.find(t => t.ticker === ticker);
+    return t ? t.nombre : ticker;
+  }
+  return ticker;
+}
+
+function setInvTab(tab) {
+  S.invTab = tab;
+  document.querySelectorAll('.inv-gtab').forEach(b =>
+    b.classList.toggle('active', b.dataset.tab === tab)
+  );
+  renderPortafolioTab();
+}
+
 function renderPortafolio() {
   const el = document.getElementById('inv-portafolio');
   const abiertas = S.inversiones.filter(i => i.estado === 'abierta');
@@ -1084,7 +1268,14 @@ function renderPortafolio() {
   const totalInv = abiertas.reduce((s, i) => s + Number(i.valor_cop_entrada), 0);
   const gananciaRealizada = cerradas.reduce((s, i) => s + (Number(i.valor_cop_cierre) - Number(i.valor_cop_entrada)), 0);
 
-  let html = `
+  const tabs = [
+    { id:'colombia',  label:'🇨🇴 Colombia' },
+    { id:'eeuu',      label:'🇺🇸 EE.UU.'   },
+    { id:'divisas',   label:'💱 Divisas'   },
+    { id:'prestamos', label:'🤝 Préstamos' }
+  ];
+
+  el.innerHTML = `
     <div class="grid2" style="margin-bottom:10px">
       <div class="card" style="margin-bottom:0">
         <div class="card-label">Invertido Activo</div>
@@ -1094,19 +1285,34 @@ function renderPortafolio() {
         <div class="card-label">Ganancia Realizada</div>
         <div class="card-value ${gananciaRealizada >= 0 ? 'v-income' : 'v-expense'}" style="font-size:20px">${cop(gananciaRealizada)}</div>
       </div>
-    </div>`;
+    </div>
+    <div class="inv-group-tabs">
+      ${tabs.map(t => `<button class="inv-gtab${S.invTab===t.id?' active':''}" data-tab="${t.id}" onclick="setInvTab('${t.id}')">${t.label}</button>`).join('')}
+    </div>
+    <div id="inv-tab-content"></div>`;
 
-  if (!abiertas.length && !cerradas.length) {
-    html += '<div class="empty"><div class="empty-icon">📈</div>Sin inversiones registradas</div>';
-  } else {
-    if (abiertas.length) {
-      html += '<div class="sec">Posiciones Abiertas</div>';
-      html += abiertas.map(renderInvCard).join('');
-    }
-    if (cerradas.length) {
-      html += `<div class="sec" style="margin-top:16px">Posiciones Cerradas (${cerradas.length})</div>`;
-      html += cerradas.map(renderInvCard).join('');
-    }
+  renderPortafolioTab();
+}
+
+function renderPortafolioTab() {
+  const tipos = TAB_TIPOS[S.invTab] || [];
+  const items = S.inversiones.filter(i => tipos.includes(i.tipo));
+  const abiertas = items.filter(i => i.estado === 'abierta');
+  const cerradas = items.filter(i => i.estado === 'cerrada');
+  const el = document.getElementById('inv-tab-content');
+  if (!el) return;
+
+  if (!items.length) {
+    el.innerHTML = '<div class="empty" style="padding:28px 0"><div class="empty-icon">📈</div>Sin inversiones en esta categoría</div>';
+    return;
+  }
+
+  let html = '';
+  if (abiertas.length) {
+    html += '<div class="sec">Abiertas</div>' + abiertas.map(renderInvCard).join('');
+  }
+  if (cerradas.length) {
+    html += `<div class="sec" style="margin-top:14px">Cerradas (${cerradas.length})</div>` + cerradas.map(renderInvCard).join('');
   }
   el.innerHTML = html;
 }
@@ -1116,6 +1322,10 @@ function renderInvCard(inv) {
   const ganancia = !abierta ? Number(inv.valor_cop_cierre) - Number(inv.valor_cop_entrada) : null;
   const ganPct = ganancia !== null && Number(inv.valor_cop_entrada) > 0
     ? (ganancia / Number(inv.valor_cop_entrada) * 100).toFixed(1) : '0.0';
+
+  const esAccion = inv.tipo === 'accion_nacional' || inv.tipo === 'accion_internacional';
+  const displayName = esAccion ? tickerNombre(inv.nombre, inv.tipo) : inv.nombre;
+  const tickerTag = esAccion ? `<div class="inv-ticker">${inv.nombre}</div>` : '';
 
   let amountsHtml;
   if (inv.tipo === 'prestamo') {
@@ -1167,7 +1377,8 @@ function renderInvCard(inv) {
     <div class="inv-card">
       <div class="inv-header">
         <div>
-          <div class="inv-title">${inv.nombre}</div>
+          <div class="inv-title">${displayName}</div>
+          ${tickerTag}
           <div class="inv-sub">${invTipoLabel(inv.tipo)} · ${inv.fecha}</div>
         </div>
         <span class="inv-badge ${abierta ? 'badge-open' : 'badge-closed'}">${abierta ? 'Abierta' : 'Cerrada'}</span>
@@ -1257,8 +1468,8 @@ function renderNuevaInversion() {
       <div class="form-group">
         <label>Tipo de inversión</label>
         <select id="inv-tipo" onchange="renderFormInversion()">
-          <option value="accion_nacional">Acción Nacional (BVC)</option>
-          <option value="accion_internacional">Acción Internacional</option>
+          <option value="accion_nacional">Acción Nacional (BVC Colombia)</option>
+          <option value="accion_internacional">Acción / ETF Internacional (EE.UU.)</option>
           <option value="prestamo">Préstamo a tercero</option>
           <option value="divisa">Divisa (USD / EUR)</option>
         </select>
@@ -1277,14 +1488,33 @@ function renderNuevaInversion() {
   renderFormInversion();
 }
 
+function bvcOptions() {
+  const sectors = [...new Set(TICKERS_BVC.map(t => t.sector))];
+  return sectors.map(s => {
+    const opts = TICKERS_BVC.filter(t => t.sector === s)
+      .map(t => `<option value="${t.ticker}">${t.nombre} (${t.ticker})</option>`).join('');
+    return `<optgroup label="${s}">${opts}</optgroup>`;
+  }).join('');
+}
+
+function filterUSTickers() {
+  const q = document.getElementById('inv-us-filter').value.toLowerCase();
+  const sel = document.getElementById('inv-nombre-us');
+  const filtered = q
+    ? TICKERS_US.filter(t => t.ticker.toLowerCase().includes(q) || t.nombre.toLowerCase().includes(q) || t.sector.toLowerCase().includes(q))
+    : TICKERS_US;
+  sel.innerHTML = filtered.map(t => `<option value="${t.ticker}">${t.nombre} — ${t.ticker} (${t.sector})</option>`).join('');
+}
+
 function renderFormInversion() {
   const tipo = document.getElementById('inv-tipo').value;
   const el   = document.getElementById('inv-form-fields');
+
   if (tipo === 'accion_nacional') {
     el.innerHTML = `
       <div class="form-group">
-        <label>Ticker (ej: BVC:PFBCOLOM)</label>
-        <input type="text" id="inv-nombre" placeholder="BVC:PFBCOLOM" style="text-transform:uppercase">
+        <label>Acción / ETF (BVC)</label>
+        <select id="inv-nombre-bvc">${bvcOptions()}</select>
       </div>
       <div class="form-group">
         <label>Número de acciones</label>
@@ -1296,12 +1526,16 @@ function renderFormInversion() {
       </div>`;
   } else if (tipo === 'accion_internacional') {
     el.innerHTML = `
-      <div class="form-group">
-        <label>Ticker (ej: AAPL, MSFT)</label>
-        <input type="text" id="inv-nombre" placeholder="AAPL" style="text-transform:uppercase">
+      <div class="form-group ticker-search">
+        <label>Buscar acción / ETF</label>
+        <input type="text" id="inv-us-filter" placeholder="Ej: Apple, AAPL, ETF..." oninput="filterUSTickers()">
       </div>
       <div class="form-group">
-        <label>Número de acciones</label>
+        <label>Seleccionar</label>
+        <select id="inv-nombre-us"></select>
+      </div>
+      <div class="form-group">
+        <label>Número de acciones / unidades</label>
         <input type="number" id="inv-cantidad" placeholder="0" inputmode="decimal">
       </div>
       <div class="form-group">
@@ -1312,11 +1546,12 @@ function renderFormInversion() {
         <label>Tasa USD/COP al comprar</label>
         <input type="number" id="inv-tasa" placeholder="ej: 4200" inputmode="numeric">
       </div>`;
+    filterUSTickers();
   } else if (tipo === 'prestamo') {
     el.innerHTML = `
       <div class="form-group">
         <label>Persona / Deudor</label>
-        <input type="text" id="inv-nombre" placeholder="Nombre del deudor">
+        <input type="text" id="inv-nombre-text" placeholder="Nombre del deudor">
       </div>
       <div class="form-group">
         <label>Monto prestado (COP)</label>
@@ -1331,8 +1566,8 @@ function renderFormInversion() {
       <div class="form-group">
         <label>Moneda</label>
         <select id="inv-moneda">
-          <option value="USD">USD (Dólar)</option>
-          <option value="EUR">EUR (Euro)</option>
+          <option value="USD">USD — Dólar estadounidense</option>
+          <option value="EUR">EUR — Euro</option>
         </select>
       </div>
       <div class="form-group">
@@ -1355,20 +1590,20 @@ async function addInversionSubmit() {
   let data = { tipo, fecha, nota };
   try {
     if (tipo === 'accion_nacional') {
-      const nombre   = document.getElementById('inv-nombre').value.trim().toUpperCase();
+      const nombre   = document.getElementById('inv-nombre-bvc').value;
       const cantidad = Number(document.getElementById('inv-cantidad').value);
       const precio   = Number(document.getElementById('inv-precio').value);
       if (!nombre || !cantidad || !precio) { toast('Completa todos los campos'); return; }
       Object.assign(data, { nombre, moneda: 'COP', cantidad, precio_entrada: precio, valor_cop_entrada: cantidad * precio, tasa: 0 });
     } else if (tipo === 'accion_internacional') {
-      const nombre   = document.getElementById('inv-nombre').value.trim().toUpperCase();
+      const nombre   = document.getElementById('inv-nombre-us').value;
       const cantidad = Number(document.getElementById('inv-cantidad').value);
       const precio   = Number(document.getElementById('inv-precio').value);
       const tasa     = Number(document.getElementById('inv-tasa').value);
       if (!nombre || !cantidad || !precio || !tasa) { toast('Completa todos los campos'); return; }
       Object.assign(data, { nombre, moneda: 'USD', cantidad, precio_entrada: precio, valor_cop_entrada: cantidad * precio * tasa, tasa });
     } else if (tipo === 'prestamo') {
-      const nombre = document.getElementById('inv-nombre').value.trim();
+      const nombre = document.getElementById('inv-nombre-text').value.trim();
       const monto  = Number(document.getElementById('inv-precio').value);
       const tasa   = Number(document.getElementById('inv-tasa').value || 0);
       if (!nombre || !monto) { toast('Completa todos los campos'); return; }
