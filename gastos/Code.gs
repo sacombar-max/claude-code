@@ -215,36 +215,55 @@ function getPrecioActual(tipo, nombre, moneda) {
     let cache = ss.getSheetByName('_cache_');
     if (!cache) { cache = ss.insertSheet('_cache_'); cache.hideSheet(); }
 
-    if (tipo === 'divisa') {
-      const sym = moneda === 'EUR' ? 'EURCOP' : 'USDCOP';
-      cache.getRange('A1').setFormula(`=GOOGLEFINANCE("CURRENCY:${sym}")`);
-      SpreadsheetApp.flush(); Utilities.sleep(2500);
-      const v = cache.getRange('A1').getValue();
-      cache.getRange('A1').clearContent();
-      return typeof v === 'number' ? { tasa: v } : null;
-    }
-    if (tipo === 'accion_nacional') {
-      cache.getRange('A1').setFormula(`=GOOGLEFINANCE("${nombre}","price")`);
-      SpreadsheetApp.flush(); Utilities.sleep(2500);
-      const v = cache.getRange('A1').getValue();
-      cache.getRange('A1').clearContent();
-      return typeof v === 'number' ? { precio: v } : null;
-    }
-    if (tipo === 'accion_internacional') {
-      cache.getRange('A1').setFormula(`=GOOGLEFINANCE("${nombre}","price")`);
-      cache.getRange('A2').setFormula('=GOOGLEFINANCE("CURRENCY:USDCOP")');
-      SpreadsheetApp.flush(); Utilities.sleep(3000);
-      const precio = cache.getRange('A1').getValue();
-      const tasa   = cache.getRange('A2').getValue();
-      cache.getRange('A1:A2').clearContent();
-      if (typeof precio === 'number' && typeof tasa === 'number') {
-        return { precioUSD: precio, tasaCOP: tasa, precioCOP: precio * tasa };
+    // Helper: wait until a cell has a numeric value (retries up to 3 times)
+    function waitNum(range, delays) {
+      for (const ms of delays) {
+        SpreadsheetApp.flush();
+        Utilities.sleep(ms);
+        const v = range.getValue();
+        if (typeof v === 'number' && v > 0) return v;
+        Logger.log('waitNum: got ' + JSON.stringify(v) + ' after ' + ms + 'ms, retrying');
       }
       return null;
     }
+
+    if (tipo === 'divisa') {
+      const sym = moneda === 'EUR' ? 'EURCOP' : 'USDCOP';
+      cache.getRange('A1').setFormula(`=GOOGLEFINANCE("CURRENCY:${sym}")`);
+      const v = waitNum(cache.getRange('A1'), [2500, 3000, 4000]);
+      cache.getRange('A1').clearContent();
+      return v ? { tasa: v } : null;
+    }
+
+    if (tipo === 'accion_nacional') {
+      cache.getRange('A1').setFormula(`=GOOGLEFINANCE("${nombre}","price")`);
+      const v = waitNum(cache.getRange('A1'), [3000, 4000, 5000]);
+      cache.getRange('A1').clearContent();
+      return v ? { precio: v } : null;
+    }
+
+    if (tipo === 'accion_internacional') {
+      cache.getRange('A1').setFormula(`=GOOGLEFINANCE("${nombre}","price")`);
+      cache.getRange('A2').setFormula('=GOOGLEFINANCE("CURRENCY:USDCOP")');
+      const delays = [3500, 4500, 5500];
+      let precio = null, tasa = null;
+      for (const ms of delays) {
+        SpreadsheetApp.flush();
+        Utilities.sleep(ms);
+        const p = cache.getRange('A1').getValue();
+        const t = cache.getRange('A2').getValue();
+        if (typeof p === 'number' && p > 0) precio = p;
+        if (typeof t === 'number' && t > 0) tasa = t;
+        if (precio && tasa) break;
+        Logger.log('intl retry after ' + ms + 'ms: precio=' + p + ' tasa=' + t);
+      }
+      cache.getRange('A1:A2').clearContent();
+      return (precio && tasa) ? { precioUSD: precio, tasaCOP: tasa, precioCOP: precio * tasa } : null;
+    }
+
     return null;
   } catch(e) {
-    Logger.log('getPrecioActual: ' + e.message);
+    Logger.log('getPrecioActual error: ' + e.message);
     return null;
   }
 }
