@@ -207,11 +207,45 @@
     .tab {
       flex: 1; display: flex; flex-direction: column; align-items: center;
       justify-content: center; border: none; background: none;
-      cursor: pointer; color: var(--muted); font-size: 10px; font-weight: 500; gap: 3px;
+      cursor: pointer; color: var(--muted); font-size: 9px; font-weight: 500; gap: 2px;
       transition: color .2s;
     }
     .tab.active { color: var(--primary); }
-    .tab svg { width: 21px; height: 21px; }
+    .tab svg { width: 19px; height: 19px; }
+
+    /* ── Inversiones ── */
+    .inv-subnav { margin-bottom: 14px; }
+    .inv-card {
+      background: #fff; border-radius: 12px; padding: 14px 16px; margin-bottom: 10px;
+      box-shadow: 0 1px 4px rgba(0,0,0,.07);
+    }
+    .inv-header { display: flex; justify-content: space-between; align-items: flex-start; }
+    .inv-title  { font-weight: 600; font-size: 15px; }
+    .inv-sub    { font-size: 12px; color: var(--muted); margin-top: 2px; }
+    .inv-badge  {
+      font-size: 11px; font-weight: 600; padding: 3px 8px;
+      border-radius: 10px; white-space: nowrap;
+    }
+    .badge-open   { background: #ECFDF5; color: var(--primary); }
+    .badge-closed { background: #F3F4F6; color: var(--muted); }
+    .inv-amounts { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-top: 12px; }
+    .inv-amt-box { background: var(--bg); border-radius: 8px; padding: 8px; text-align: center; }
+    .inv-amt-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .3px; }
+    .inv-amt-val   { font-size: 13px; font-weight: 700; margin-top: 2px; }
+    .inv-actions { display: flex; gap: 8px; margin-top: 12px; }
+    .btn-inv-action {
+      flex: 1; padding: 9px; border-radius: 9px; border: 1.5px solid var(--border);
+      background: none; font-size: 13px; font-weight: 500; cursor: pointer; color: var(--text);
+    }
+    .btn-inv-close { background: var(--primary); color: #fff; border-color: var(--primary); }
+    .btn-inv-price { background: #EEF2FF; color: #4338CA; border-color: #C7D2FE; }
+    .cierre-form { background: var(--bg); border-radius: 10px; padding: 12px; margin-top: 10px; }
+    .cierre-form label { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; }
+    .cierre-form input { margin-top: 5px; margin-bottom: 10px; }
+    .informe-row { display: flex; justify-content: space-between; padding: 9px 4px; border-bottom: 1px solid var(--border); font-size: 13.5px; }
+    .informe-total { font-weight: 700; background: var(--bg); border-radius: 8px; padding: 10px; margin-top: 8px; }
+    .gain-pos { color: var(--income); }
+    .gain-neg { color: var(--expense); }
   </style>
 </head>
 <body>
@@ -349,6 +383,20 @@
     <div class="card"><div id="cat-avg"></div></div>
   </div>
 
+  <!-- ══ INVERSIONES ══ -->
+  <div id="view-inversiones" class="view">
+    <div class="inv-subnav">
+      <div class="type-tabs">
+        <button class="type-tab active" onclick="setInvView('portafolio')">Portafolio</button>
+        <button class="type-tab" onclick="setInvView('nueva')">Nueva</button>
+        <button class="type-tab" onclick="setInvView('informe')">Informe</button>
+      </div>
+    </div>
+    <div id="inv-portafolio"></div>
+    <div id="inv-nueva" style="display:none"></div>
+    <div id="inv-informe" style="display:none"></div>
+  </div>
+
 </main>
 
 <!-- Tab bar -->
@@ -387,6 +435,12 @@
     </svg>
     Tendencias
   </button>
+  <button class="tab" onclick="goTo('inversiones')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/>
+    </svg>
+    Inversiones
+  </button>
 </nav>
 
 <div id="toast" class="toast"></div>
@@ -411,18 +465,21 @@ const MESES_CORTOS = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct
 // ============================================================
 const now = new Date();
 const S = {
-  view:    'resumen',
-  mes:     fmt(now.getFullYear(), now.getMonth() + 1),
-  anio:    String(now.getFullYear()),
-  txs:     [],
-  budget:  [],
-  medeben: [],
-  trends:  [],
-  rtype:   'egreso',
-  tgasto:  'F',
-  cuenta:  'Cuenta de Ahorros',
-  filtro:  'todos',
-  chart:   null
+  view:        'resumen',
+  mes:         fmt(now.getFullYear(), now.getMonth() + 1),
+  anio:        String(now.getFullYear()),
+  txs:         [],
+  budget:      [],
+  medeben:     [],
+  trends:      [],
+  inversiones: [],
+  invView:     'portafolio',
+  invAnio:     String(now.getFullYear()),
+  rtype:       'egreso',
+  tgasto:      'F',
+  cuenta:      'Cuenta de Ahorros',
+  filtro:      'todos',
+  chart:       null
 };
 
 function fmt(y, m) { return `${y}-${String(m).padStart(2,'0')}`; }
@@ -460,12 +517,14 @@ function goTo(view) {
   document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
   document.getElementById(`view-${view}`).classList.add('active');
   document.querySelector(`.tab[onclick="goTo('${view}')"]`).classList.add('active');
-  document.getElementById('month-nav').style.display = view === 'tendencias' ? 'none' : 'flex';
+  document.getElementById('month-nav').style.display =
+    (view === 'tendencias' || view === 'inversiones') ? 'none' : 'flex';
 
   if (view === 'resumen')       renderResumen();
   if (view === 'transacciones') renderTxs();
   if (view === 'presupuesto')   renderBudget();
   if (view === 'tendencias')    { loadYear(); }
+  if (view === 'inversiones')   { loadInversiones(); }
 }
 
 function changeMonth(d) {
@@ -985,6 +1044,419 @@ function renderTendencias() {
         </tbody>
       </table>`;
   }
+}
+
+// ============================================================
+// INVERSIONES
+// ============================================================
+const INV_TIPOS = {
+  accion_nacional:       'Acción Nacional',
+  accion_internacional:  'Acción Internacional',
+  prestamo:              'Préstamo',
+  divisa:                'Divisa'
+};
+function invTipoLabel(t) { return INV_TIPOS[t] || t; }
+
+async function loadInversiones() {
+  try {
+    S.inversiones = await api('getInversiones');
+    setInvView(S.invView);
+  } catch(e) { console.error(e); toast('Error cargando inversiones'); }
+}
+
+function setInvView(v) {
+  S.invView = v;
+  document.querySelectorAll('#view-inversiones .type-tab').forEach((b, i) =>
+    b.classList.toggle('active', ['portafolio','nueva','informe'][i] === v)
+  );
+  document.getElementById('inv-portafolio').style.display = v === 'portafolio' ? '' : 'none';
+  document.getElementById('inv-nueva').style.display      = v === 'nueva'      ? '' : 'none';
+  document.getElementById('inv-informe').style.display    = v === 'informe'    ? '' : 'none';
+  if (v === 'portafolio') renderPortafolio();
+  if (v === 'nueva')      renderNuevaInversion();
+  if (v === 'informe')    renderInformeAnual();
+}
+
+function renderPortafolio() {
+  const el = document.getElementById('inv-portafolio');
+  const abiertas = S.inversiones.filter(i => i.estado === 'abierta');
+  const cerradas = S.inversiones.filter(i => i.estado === 'cerrada');
+  const totalInv = abiertas.reduce((s, i) => s + Number(i.valor_cop_entrada), 0);
+  const gananciaRealizada = cerradas.reduce((s, i) => s + (Number(i.valor_cop_cierre) - Number(i.valor_cop_entrada)), 0);
+
+  let html = `
+    <div class="grid2" style="margin-bottom:10px">
+      <div class="card" style="margin-bottom:0">
+        <div class="card-label">Invertido Activo</div>
+        <div class="card-value v-purple" style="font-size:20px">${cop(totalInv)}</div>
+      </div>
+      <div class="card" style="margin-bottom:0">
+        <div class="card-label">Ganancia Realizada</div>
+        <div class="card-value ${gananciaRealizada >= 0 ? 'v-income' : 'v-expense'}" style="font-size:20px">${cop(gananciaRealizada)}</div>
+      </div>
+    </div>`;
+
+  if (!abiertas.length && !cerradas.length) {
+    html += '<div class="empty"><div class="empty-icon">📈</div>Sin inversiones registradas</div>';
+  } else {
+    if (abiertas.length) {
+      html += '<div class="sec">Posiciones Abiertas</div>';
+      html += abiertas.map(renderInvCard).join('');
+    }
+    if (cerradas.length) {
+      html += `<div class="sec" style="margin-top:16px">Posiciones Cerradas (${cerradas.length})</div>`;
+      html += cerradas.map(renderInvCard).join('');
+    }
+  }
+  el.innerHTML = html;
+}
+
+function renderInvCard(inv) {
+  const abierta = inv.estado === 'abierta';
+  const ganancia = !abierta ? Number(inv.valor_cop_cierre) - Number(inv.valor_cop_entrada) : null;
+  const ganPct = ganancia !== null && Number(inv.valor_cop_entrada) > 0
+    ? (ganancia / Number(inv.valor_cop_entrada) * 100).toFixed(1) : '0.0';
+
+  let amountsHtml;
+  if (inv.tipo === 'prestamo') {
+    amountsHtml = `
+      <div class="inv-amt-box"><div class="inv-amt-label">Principal</div><div class="inv-amt-val">${cop(inv.valor_cop_entrada)}</div></div>
+      <div class="inv-amt-box"><div class="inv-amt-label">Tasa anual</div><div class="inv-amt-val">${inv.tasa}%</div></div>
+      <div class="inv-amt-box"><div class="inv-amt-label">Fecha</div><div class="inv-amt-val" style="font-size:11px">${inv.fecha}</div></div>`;
+  } else if (inv.tipo === 'divisa') {
+    amountsHtml = `
+      <div class="inv-amt-box"><div class="inv-amt-label">Cantidad</div><div class="inv-amt-val">${Number(inv.cantidad).toLocaleString()} ${inv.moneda}</div></div>
+      <div class="inv-amt-box"><div class="inv-amt-label">Tasa entrada</div><div class="inv-amt-val">${cop(inv.precio_entrada)}</div></div>
+      <div class="inv-amt-box"><div class="inv-amt-label">Valor COP</div><div class="inv-amt-val">${cop(inv.valor_cop_entrada)}</div></div>`;
+  } else {
+    amountsHtml = `
+      <div class="inv-amt-box"><div class="inv-amt-label">Cantidad</div><div class="inv-amt-val">${inv.cantidad}</div></div>
+      <div class="inv-amt-box"><div class="inv-amt-label">P. Entrada</div><div class="inv-amt-val">${cop(inv.precio_entrada)}</div></div>
+      <div class="inv-amt-box"><div class="inv-amt-label">Total COP</div><div class="inv-amt-val">${cop(inv.valor_cop_entrada)}</div></div>`;
+  }
+
+  const closedInfo = !abierta && ganancia !== null ? `
+    <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
+      <span style="font-size:12px;color:var(--muted)">Cierre: ${inv.fecha_cierre} · ${cop(inv.valor_cop_cierre)}</span>
+      <span style="font-size:14px;font-weight:700" class="${ganancia >= 0 ? 'gain-pos' : 'gain-neg'}">${ganancia >= 0 ? '+' : ''}${cop(ganancia)} (${ganPct}%)</span>
+    </div>` : '';
+
+  const precioBtn = (abierta && inv.tipo !== 'prestamo')
+    ? `<button class="btn-inv-action btn-inv-price" onclick="getPrecioActualUI('${inv.id}','${inv.tipo}','${inv.nombre}','${inv.moneda}')">Ver precio</button>`
+    : '';
+
+  const actionsHtml = abierta ? `
+    <div class="inv-actions">
+      <button class="btn-inv-action btn-inv-close" onclick="initCierreForm('${inv.id}')">Cerrar posición</button>
+      ${precioBtn}
+      <button class="btn-inv-action" onclick="deleteInvUI('${inv.id}')">×</button>
+    </div>
+    <div class="cierre-form" id="cierre-${inv.id}" style="display:none">
+      <label>Fecha de cierre</label>
+      <input type="date" id="c-fecha-${inv.id}" value="${new Date().toISOString().split('T')[0]}">
+      ${inv.tipo !== 'prestamo' && inv.tipo !== 'divisa' ? `<label>Precio de cierre (${inv.moneda})</label><input type="number" id="c-precio-${inv.id}" placeholder="0" inputmode="decimal">` : ''}
+      <label>Valor total COP al cierre</label>
+      <input type="number" id="c-valorCOP-${inv.id}" placeholder="0" inputmode="numeric">
+      <button class="btn-main" style="margin-top:0" onclick="submitCierre('${inv.id}')">Confirmar cierre</button>
+    </div>` : `
+    <div class="inv-actions">
+      <button class="btn-inv-action" onclick="deleteInvUI('${inv.id}')">Eliminar</button>
+    </div>`;
+
+  return `
+    <div class="inv-card">
+      <div class="inv-header">
+        <div>
+          <div class="inv-title">${inv.nombre}</div>
+          <div class="inv-sub">${invTipoLabel(inv.tipo)} · ${inv.fecha}</div>
+        </div>
+        <span class="inv-badge ${abierta ? 'badge-open' : 'badge-closed'}">${abierta ? 'Abierta' : 'Cerrada'}</span>
+      </div>
+      <div class="inv-amounts">${amountsHtml}</div>
+      ${closedInfo}
+      ${actionsHtml}
+      <div id="precio-result-${inv.id}"></div>
+    </div>`;
+}
+
+function initCierreForm(id) {
+  const el = document.getElementById(`cierre-${id}`);
+  if (el) el.style.display = el.style.display === 'none' ? '' : 'none';
+}
+
+async function submitCierre(id) {
+  const fecha    = document.getElementById(`c-fecha-${id}`).value;
+  const valorCOP = document.getElementById(`c-valorCOP-${id}`).value;
+  if (!fecha || !valorCOP) { toast('Completa fecha y valor COP'); return; }
+  const precioEl = document.getElementById(`c-precio-${id}`);
+  const precio   = precioEl ? precioEl.value : '0';
+  try {
+    await api('cerrarInversion', id, {
+      fecha_cierre: fecha,
+      precio_cierre: Number(precio || 0),
+      valor_cop_cierre: Number(valorCOP)
+    });
+    toast('Inversión cerrada ✓');
+    S.inversiones = await api('getInversiones');
+    renderPortafolio();
+  } catch(e) { toast('Error al cerrar'); console.error(e); }
+}
+
+async function getPrecioActualUI(id, tipo, nombre, moneda) {
+  const el = document.getElementById(`precio-result-${id}`);
+  el.innerHTML = '<div style="font-size:12px;color:var(--muted);padding:6px 0">Consultando precio... (puede tardar ~5s)</div>';
+  try {
+    const r = await api('getPrecioActual', tipo, nombre, moneda);
+    if (!r) { el.innerHTML = '<div style="font-size:12px;color:var(--expense);padding:6px 0">No se pudo obtener el precio</div>'; return; }
+    const inv = S.inversiones.find(i => i.id === id);
+    let html = '';
+    if (tipo === 'divisa') {
+      const valorActual = Number(inv.cantidad) * r.tasa;
+      const ganancia    = valorActual - Number(inv.valor_cop_entrada);
+      html = `<div style="background:var(--bg);border-radius:8px;padding:10px;margin-top:8px;font-size:13px">
+        <div>Tasa actual: <b>${cop(r.tasa)}</b> / ${moneda}</div>
+        <div>Valor actual: <b>${cop(valorActual)}</b></div>
+        <div>Ganancia no realizada: <b class="${ganancia>=0?'gain-pos':'gain-neg'}">${ganancia>=0?'+':''}${cop(ganancia)}</b></div>
+      </div>`;
+    } else if (tipo === 'accion_nacional') {
+      const valorActual = Number(inv.cantidad) * r.precio;
+      const ganancia    = valorActual - Number(inv.valor_cop_entrada);
+      html = `<div style="background:var(--bg);border-radius:8px;padding:10px;margin-top:8px;font-size:13px">
+        <div>Precio actual: <b>${cop(r.precio)}</b></div>
+        <div>Valor actual: <b>${cop(valorActual)}</b></div>
+        <div>Ganancia no realizada: <b class="${ganancia>=0?'gain-pos':'gain-neg'}">${ganancia>=0?'+':''}${cop(ganancia)}</b></div>
+      </div>`;
+    } else if (tipo === 'accion_internacional') {
+      const valorActual = Number(inv.cantidad) * r.precioCOP;
+      const ganancia    = valorActual - Number(inv.valor_cop_entrada);
+      html = `<div style="background:var(--bg);border-radius:8px;padding:10px;margin-top:8px;font-size:13px">
+        <div>Precio: <b>USD ${r.precioUSD.toFixed(2)}</b> · Tasa: <b>${cop(r.tasaCOP)}</b></div>
+        <div>Precio COP: <b>${cop(r.precioCOP)}</b></div>
+        <div>Valor actual: <b>${cop(valorActual)}</b></div>
+        <div>Ganancia no realizada: <b class="${ganancia>=0?'gain-pos':'gain-neg'}">${ganancia>=0?'+':''}${cop(ganancia)}</b></div>
+      </div>`;
+    }
+    el.innerHTML = html;
+  } catch(e) { el.innerHTML = '<div style="font-size:12px;color:var(--expense);padding:6px 0">Error al consultar precio</div>'; }
+}
+
+async function deleteInvUI(id) {
+  if (!confirm('¿Eliminar esta inversión?')) return;
+  try {
+    await api('deleteInversion', id);
+    toast('Eliminada');
+    S.inversiones = await api('getInversiones');
+    renderPortafolio();
+  } catch(e) { toast('Error'); }
+}
+
+function renderNuevaInversion() {
+  const el = document.getElementById('inv-nueva');
+  el.innerHTML = `
+    <div class="card">
+      <div class="form-group">
+        <label>Tipo de inversión</label>
+        <select id="inv-tipo" onchange="renderFormInversion()">
+          <option value="accion_nacional">Acción Nacional (BVC)</option>
+          <option value="accion_internacional">Acción Internacional</option>
+          <option value="prestamo">Préstamo a tercero</option>
+          <option value="divisa">Divisa (USD / EUR)</option>
+        </select>
+      </div>
+      <div id="inv-form-fields"></div>
+      <div class="form-group">
+        <label>Fecha</label>
+        <input type="date" id="inv-fecha" value="${new Date().toISOString().split('T')[0]}">
+      </div>
+      <div class="form-group">
+        <label>Nota (opcional)</label>
+        <input type="text" id="inv-nota" placeholder="Observaciones...">
+      </div>
+      <button class="btn-main" onclick="addInversionSubmit()">Registrar inversión</button>
+    </div>`;
+  renderFormInversion();
+}
+
+function renderFormInversion() {
+  const tipo = document.getElementById('inv-tipo').value;
+  const el   = document.getElementById('inv-form-fields');
+  if (tipo === 'accion_nacional') {
+    el.innerHTML = `
+      <div class="form-group">
+        <label>Ticker (ej: BVC:PFBCOLOM)</label>
+        <input type="text" id="inv-nombre" placeholder="BVC:PFBCOLOM" style="text-transform:uppercase">
+      </div>
+      <div class="form-group">
+        <label>Número de acciones</label>
+        <input type="number" id="inv-cantidad" placeholder="0" inputmode="decimal">
+      </div>
+      <div class="form-group">
+        <label>Precio de entrada (COP por acción)</label>
+        <input type="number" id="inv-precio" placeholder="0" inputmode="numeric">
+      </div>`;
+  } else if (tipo === 'accion_internacional') {
+    el.innerHTML = `
+      <div class="form-group">
+        <label>Ticker (ej: AAPL, MSFT)</label>
+        <input type="text" id="inv-nombre" placeholder="AAPL" style="text-transform:uppercase">
+      </div>
+      <div class="form-group">
+        <label>Número de acciones</label>
+        <input type="number" id="inv-cantidad" placeholder="0" inputmode="decimal">
+      </div>
+      <div class="form-group">
+        <label>Precio de entrada (USD por acción)</label>
+        <input type="number" id="inv-precio" placeholder="0" inputmode="decimal">
+      </div>
+      <div class="form-group">
+        <label>Tasa USD/COP al comprar</label>
+        <input type="number" id="inv-tasa" placeholder="ej: 4200" inputmode="numeric">
+      </div>`;
+  } else if (tipo === 'prestamo') {
+    el.innerHTML = `
+      <div class="form-group">
+        <label>Persona / Deudor</label>
+        <input type="text" id="inv-nombre" placeholder="Nombre del deudor">
+      </div>
+      <div class="form-group">
+        <label>Monto prestado (COP)</label>
+        <input type="number" id="inv-precio" placeholder="0" inputmode="numeric">
+      </div>
+      <div class="form-group">
+        <label>Tasa de interés anual (%)</label>
+        <input type="number" id="inv-tasa" placeholder="0" inputmode="decimal">
+      </div>`;
+  } else if (tipo === 'divisa') {
+    el.innerHTML = `
+      <div class="form-group">
+        <label>Moneda</label>
+        <select id="inv-moneda">
+          <option value="USD">USD (Dólar)</option>
+          <option value="EUR">EUR (Euro)</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Cantidad de divisa comprada</label>
+        <input type="number" id="inv-cantidad" placeholder="ej: 1000" inputmode="decimal">
+      </div>
+      <div class="form-group">
+        <label>Tasa de compra (COP por unidad)</label>
+        <input type="number" id="inv-precio" placeholder="ej: 4200" inputmode="numeric">
+      </div>`;
+  }
+}
+
+async function addInversionSubmit() {
+  const tipo  = document.getElementById('inv-tipo').value;
+  const fecha = document.getElementById('inv-fecha').value;
+  const nota  = document.getElementById('inv-nota').value;
+  if (!fecha) { toast('Ingresa la fecha'); return; }
+
+  let data = { tipo, fecha, nota };
+  try {
+    if (tipo === 'accion_nacional') {
+      const nombre   = document.getElementById('inv-nombre').value.trim().toUpperCase();
+      const cantidad = Number(document.getElementById('inv-cantidad').value);
+      const precio   = Number(document.getElementById('inv-precio').value);
+      if (!nombre || !cantidad || !precio) { toast('Completa todos los campos'); return; }
+      Object.assign(data, { nombre, moneda: 'COP', cantidad, precio_entrada: precio, valor_cop_entrada: cantidad * precio, tasa: 0 });
+    } else if (tipo === 'accion_internacional') {
+      const nombre   = document.getElementById('inv-nombre').value.trim().toUpperCase();
+      const cantidad = Number(document.getElementById('inv-cantidad').value);
+      const precio   = Number(document.getElementById('inv-precio').value);
+      const tasa     = Number(document.getElementById('inv-tasa').value);
+      if (!nombre || !cantidad || !precio || !tasa) { toast('Completa todos los campos'); return; }
+      Object.assign(data, { nombre, moneda: 'USD', cantidad, precio_entrada: precio, valor_cop_entrada: cantidad * precio * tasa, tasa });
+    } else if (tipo === 'prestamo') {
+      const nombre = document.getElementById('inv-nombre').value.trim();
+      const monto  = Number(document.getElementById('inv-precio').value);
+      const tasa   = Number(document.getElementById('inv-tasa').value || 0);
+      if (!nombre || !monto) { toast('Completa todos los campos'); return; }
+      Object.assign(data, { nombre, moneda: 'COP', cantidad: 1, precio_entrada: monto, valor_cop_entrada: monto, tasa });
+    } else if (tipo === 'divisa') {
+      const moneda   = document.getElementById('inv-moneda').value;
+      const cantidad = Number(document.getElementById('inv-cantidad').value);
+      const precio   = Number(document.getElementById('inv-precio').value);
+      if (!cantidad || !precio) { toast('Completa todos los campos'); return; }
+      Object.assign(data, { nombre: moneda, moneda, cantidad, precio_entrada: precio, valor_cop_entrada: cantidad * precio, tasa: 0 });
+    }
+    await api('addInversion', data);
+    toast('Inversión registrada ✓');
+    S.inversiones = await api('getInversiones');
+    setInvView('portafolio');
+  } catch(e) { toast('Error al registrar'); console.error(e); }
+}
+
+function renderInformeAnual() {
+  const el   = document.getElementById('inv-informe');
+  const anio = S.invAnio;
+  const cerradas = S.inversiones.filter(i =>
+    i.estado === 'cerrada' && String(i.fecha_cierre).startsWith(anio)
+  );
+
+  let html = `
+    <div class="card" style="margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <span style="font-weight:700;font-size:15px">Informe Anual</span>
+        <div class="year-nav">
+          <button onclick="changeInvAnio(-1)">‹</button>
+          <span id="inv-year-lbl">${anio}</span>
+          <button onclick="changeInvAnio(1)">›</button>
+        </div>
+      </div>
+    </div>`;
+
+  if (!cerradas.length) {
+    html += `<div class="empty"><div class="empty-icon">📋</div>Sin inversiones cerradas en ${anio}</div>`;
+    el.innerHTML = html; return;
+  }
+
+  const byTipo = {};
+  cerradas.forEach(i => { (byTipo[i.tipo] = byTipo[i.tipo] || []).push(i); });
+
+  let totalGanancia = 0;
+  Object.entries(byTipo).forEach(([tipo, invs]) => {
+    const ganTipo = invs.reduce((s, i) => s + (Number(i.valor_cop_cierre) - Number(i.valor_cop_entrada)), 0);
+    totalGanancia += ganTipo;
+    html += `<div class="card" style="margin-bottom:10px">
+      <div style="font-weight:600;font-size:13px;color:var(--muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:.4px">${invTipoLabel(tipo)}</div>`;
+    invs.forEach(inv => {
+      const gan = Number(inv.valor_cop_cierre) - Number(inv.valor_cop_entrada);
+      const pct = Number(inv.valor_cop_entrada) > 0 ? (gan / Number(inv.valor_cop_entrada) * 100).toFixed(1) : '0.0';
+      html += `
+        <div class="informe-row">
+          <div>
+            <div style="font-weight:500">${inv.nombre}</div>
+            <div style="font-size:11px;color:var(--muted)">${inv.fecha} → ${inv.fecha_cierre}</div>
+          </div>
+          <div style="text-align:right">
+            <div class="${gan >= 0 ? 'gain-pos' : 'gain-neg'}" style="font-weight:600">${gan >= 0 ? '+' : ''}${cop(gan)}</div>
+            <div style="font-size:11px;color:var(--muted)">${pct}% ROI</div>
+          </div>
+        </div>`;
+    });
+    html += `
+      <div style="display:flex;justify-content:space-between;margin-top:8px;padding-top:8px;border-top:2px solid var(--border);font-size:13px;font-weight:700">
+        <span>Subtotal</span>
+        <span class="${ganTipo >= 0 ? 'gain-pos' : 'gain-neg'}">${ganTipo >= 0 ? '+' : ''}${cop(ganTipo)}</span>
+      </div>
+    </div>`;
+  });
+
+  html += `
+    <div class="informe-total">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <span style="font-size:14px;font-weight:600">GANANCIA TOTAL ${anio}</span>
+        <span style="font-size:18px;font-weight:700" class="${totalGanancia >= 0 ? 'gain-pos' : 'gain-neg'}">${totalGanancia >= 0 ? '+' : ''}${cop(totalGanancia)}</span>
+      </div>
+    </div>`;
+
+  el.innerHTML = html;
+}
+
+function changeInvAnio(d) {
+  S.invAnio = String(parseInt(S.invAnio) + d);
+  renderInformeAnual();
 }
 
 // ============================================================
