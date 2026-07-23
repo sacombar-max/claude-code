@@ -1,12 +1,12 @@
 name: Monitor Diario de Medios
 
-on:
+#on:
   # Ejecuta de lunes a viernes a las 6:30 AM hora Colombia (UTC-5 = 11:30 UTC)
-  schedule:
-    - cron: "30 11 * * 1-5"
+ # schedule:
+  #  - cron: "30 11 * * 1-5"
 
   # Permite ejecutarlo manualmente desde GitHub con un clic
-  workflow_dispatch:
+  # workflow_dispatch:
 
 jobs:
   monitor:
