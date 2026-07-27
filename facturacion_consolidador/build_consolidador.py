@@ -4,9 +4,10 @@ from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 
-# Uso: python build_consolidador.py [ruta_al_archivo_Gamma.xls] [ruta_salida.xlsx]
+# Uso: python build_consolidador.py [Gamma.xls] [mercados.xlsx] [salida.xlsx]
 GAMMA_XLS = sys.argv[1] if len(sys.argv) > 1 else "Gamma.xls"
-OUT = sys.argv[2] if len(sys.argv) > 2 else "Consolidador_Facturacion.xlsx"
+MERCADOS_XLSX = sys.argv[2] if len(sys.argv) > 2 else "mercados.xlsx"
+OUT = sys.argv[3] if len(sys.argv) > 3 else "Consolidador_Facturacion.xlsx"
 
 BRASIL_CAP = 650   # filas de datos disponibles para Brasil (~517 filas/mes observadas)
 SUIZA_CAP = 450    # filas de datos disponibles para Suiza (~343 filas/mes observadas)
@@ -18,6 +19,14 @@ gamma = gamma_raw[["IP7", "Prod Description", "R/C", "Category", "Mks descriptio
 gamma = gamma.drop_duplicates(subset=["IP7"]).sort_values("IP7")
 gamma["IP7"] = gamma["IP7"].astype(int)
 GAMMA_ROWS = len(gamma)
+
+# ---------- cargar tabla Tscode -> Mercado ----------
+mercados_raw = pd.read_excel(MERCADOS_XLSX, sheet_name="Sheet2", header=2)
+mercados_raw["Market"] = mercados_raw["Market"].ffill()
+mercados = mercados_raw.dropna(subset=["Customer Hierarchy 3 Code"])[["Customer Hierarchy 3 Code", "Market"]]
+mercados.columns = ["Tscode", "Mercado"]
+mercados = mercados.drop_duplicates(subset=["Tscode"]).sort_values("Tscode")
+MERCADOS_ROWS = len(mercados)
 
 FONT_NAME = "Arial"
 HEADER_FILL = PatternFill("solid", fgColor="1F4E78")
@@ -55,32 +64,39 @@ lines = [
     "1. Pestaña 'Brasil': borra la fila de ejemplo (fondo amarillo) y pega debajo los datos del mes tal como llegan de Brasil,",
     "   respetando las columnas: Proforma, Tscode, Cliente, Qty, Ipcode, Description, Sales force, Price USD.",
     "2. Pestaña 'Suiza_DE_CN_ID': borra la fila de ejemplo y pega los datos del archivo que envía Suiza (agrupa Alemania,",
-    "   China e Indonesia), respetando las columnas: cliente, pf, Ip Code, Description, Brand Line, Quantity, Net Price, Amount, Goods Origin.",
+    "   China e Indonesia), respetando las columnas: cliente, Tscode, pf, Ip Code, Description, Brand Line, Quantity, Net Price,",
+    "   Amount, Goods Origin.",
     "3. La pestaña 'Consolidado' se arma sola con fórmulas: no escribas nada ahí a mano.",
-    "4. La pestaña 'Gamma_Catalogo' es la tabla de referencia (catálogo de productos) usada para completar Category, R/C y",
+    "4. 'mercado' = país del CLIENTE (no el país de fabricación): se busca el Tscode de cada fila en la pestaña 'Mercados'.",
+    "   'Goods Origin' sigue siendo el país de fabricación del producto (BR para Brasil, o el código que traiga cada fila de Suiza).",
+    "5. La pestaña 'Gamma_Catalogo' es la tabla de referencia (catálogo de productos) usada para completar Category, R/C y",
     "   Mks description por Ip Code. Cuando recibas una versión nueva del archivo Gamma, reemplaza estos datos.",
-    "5. La pestaña 'Codigos_Pais' traduce el código de 'Goods Origin' (BR, CN, DE, ID) al nombre de mercado.",
+    "6. La pestaña 'Mercados' traduce el Tscode del cliente a su mercado (país/región). Si aparece un Tscode nuevo que no",
+    "   está en la lista, agrégalo ahí (columna Tscode | columna Mercado).",
     "",
     f"Capacidad actual: {BRASIL_CAP} filas de datos para Brasil y {SUIZA_CAP} filas para Suiza (con margen sobre el volumen",
     "mensual observado: ~517 filas Brasil, ~343 filas Suiza). Si algún mes se supera la capacidad, avisa para ampliar las filas.",
     "",
-    "Si en 'Consolidado' una fila muestra 'Revisar...' en Category/R-C/Mks description o en mercado, significa que el Ip Code",
-    "o el código de Goods Origin no se encontró en las tablas de referencia (código nuevo, typo, o catálogo desactualizado).",
+    "Si en 'Consolidado' una fila muestra 'Revisar Tscode', el Tscode del cliente no está en la pestaña 'Mercados' (agrégalo ahí).",
+    "Si muestra 'Revisar Ip Code' en Category/R-C/Mks description, el Ip Code no está en 'Gamma_Catalogo' (código nuevo o catálogo desactualizado).",
 ]
 for i, txt in enumerate(lines, start=2):
     ws.cell(row=i, column=1, value=txt).font = NOTE_FONT if txt else NOTE_FONT
 autofit(ws, [130])
 
-# ================= Codigos_Pais =================
-ws = wb.create_sheet("Codigos_Pais")
-ws["A1"] = "Code"
+# ================= Mercados (Tscode -> Mercado del cliente) =================
+ws = wb.create_sheet("Mercados")
+ws["A1"] = "Tscode"
 ws["B1"] = "Mercado"
 style_header(ws, 1, 2)
-codigos = [("BR", "Brasil"), ("CN", "China"), ("DE", "Alemania"), ("ID", "Indonesia")]
-for i, (code, mercado) in enumerate(codigos, start=2):
-    ws.cell(row=i, column=1, value=code).font = BLUE_INPUT
-    ws.cell(row=i, column=2, value=mercado).font = BLUE_INPUT
-autofit(ws, [12, 16])
+r = 2
+for _, row in mercados.iterrows():
+    ws.cell(row=r, column=1, value=row["Tscode"]).font = BLUE_INPUT
+    ws.cell(row=r, column=2, value=row["Mercado"]).font = BLUE_INPUT
+    r += 1
+MERCADOS_LAST_ROW = r - 1
+autofit(ws, [14, 24])
+ws.freeze_panes = "A2"
 
 # ================= Gamma_Catalogo =================
 ws = wb.create_sheet("Gamma_Catalogo")
@@ -120,17 +136,17 @@ BRASIL_LAST_ROW = 1 + BRASIL_CAP
 
 # ================= Suiza_DE_CN_ID =================
 ws = wb.create_sheet("Suiza_DE_CN_ID")
-s_headers = ["cliente", "pf", "Ip Code", "Description", "Brand Line", "Quantity", "Net Price", "Amount", "Goods Origin"]
+s_headers = ["cliente", "Tscode", "pf", "Ip Code", "Description", "Brand Line", "Quantity", "Net Price", "Amount", "Goods Origin"]
 for c, h in enumerate(s_headers, start=1):
     ws.cell(row=1, column=c, value=h)
 style_header(ws, 1, len(s_headers))
-example = ["akt (EJEMPLO - BORRAR)", 1730134137, 2283700, "180/55ZR17M/CTL (73W)(M) Z8-R",
+example = ["akt (EJEMPLO - BORRAR)", "TS02793", 1730134137, 2283700, "180/55ZR17M/CTL (73W)(M) Z8-R",
            "Moto METZELER", 3, 102, 327.3, "CN"]
 for c, v in enumerate(example, start=1):
     cell = ws.cell(row=2, column=c, value=v)
     cell.fill = EXAMPLE_FILL
     cell.font = BLACK
-autofit(ws, [24, 14, 10, 32, 16, 10, 11, 11, 13])
+autofit(ws, [24, 12, 14, 10, 32, 16, 10, 11, 11, 13])
 ws.freeze_panes = "A2"
 SUIZA_LAST_ROW = 1 + SUIZA_CAP
 
@@ -146,16 +162,18 @@ gcat_code = f"Gamma_Catalogo!$A$3:$A${GAMMA_LAST_ROW}"
 gcat_rc = f"Gamma_Catalogo!$C$3:$C${GAMMA_LAST_ROW}"
 gcat_cat = f"Gamma_Catalogo!$D$3:$D${GAMMA_LAST_ROW}"
 gcat_mks = f"Gamma_Catalogo!$E$3:$E${GAMMA_LAST_ROW}"
-pais_code = f"Codigos_Pais!$A$2:$A${1 + len(codigos)}"
-pais_mercado = f"Codigos_Pais!$B$2:$B${1 + len(codigos)}"
+tscode_col = f"Mercados!$A$2:$A${MERCADOS_LAST_ROW}"
+mercado_col = f"Mercados!$B$2:$B${MERCADOS_LAST_ROW}"
 
 out_row = 2
 
 # --- bloque Brasil ---
 for src_row in range(2, BRASIL_LAST_ROW + 1):
     b = f"Brasil!C{src_row}"  # Cliente, usada como bandera de "hay dato"
+    ts = f"Brasil!B{src_row}"
     ip = f"Brasil!E{src_row}"
-    ws.cell(row=out_row, column=1, value=f'=IF({b}="","","Brasil")')
+    ws.cell(row=out_row, column=1,
+            value=f'=IF({b}="","",IFERROR(INDEX({mercado_col},MATCH({ts},{tscode_col},0)),"Revisar Tscode"))')
     ws.cell(row=out_row, column=2, value=f'=IF({b}="","",{b})')
     ws.cell(row=out_row, column=3, value=f'=IF({b}="","",Brasil!A{src_row})')
     ws.cell(row=out_row, column=4, value=f'=IF({b}="","",{ip})')
@@ -175,17 +193,18 @@ for src_row in range(2, BRASIL_LAST_ROW + 1):
 # --- bloque Suiza (Alemania + China + Indonesia) ---
 for src_row in range(2, SUIZA_LAST_ROW + 1):
     s = f"Suiza_DE_CN_ID!A{src_row}"  # cliente, usada como bandera de "hay dato"
-    ip = f"Suiza_DE_CN_ID!C{src_row}"
-    origen = f"UPPER(Suiza_DE_CN_ID!I{src_row})"
+    ts = f"Suiza_DE_CN_ID!B{src_row}"
+    ip = f"Suiza_DE_CN_ID!D{src_row}"
+    origen = f"UPPER(Suiza_DE_CN_ID!J{src_row})"
     ws.cell(row=out_row, column=1,
-            value=f'=IF({s}="","",IFERROR(INDEX({pais_mercado},MATCH({origen},{pais_code},0)),"Revisar Goods Origin"))')
+            value=f'=IF({s}="","",IFERROR(INDEX({mercado_col},MATCH({ts},{tscode_col},0)),"Revisar Tscode"))')
     ws.cell(row=out_row, column=2, value=f'=IF({s}="","",{s})')
-    ws.cell(row=out_row, column=3, value=f'=IF({s}="","",Suiza_DE_CN_ID!B{src_row})')
+    ws.cell(row=out_row, column=3, value=f'=IF({s}="","",Suiza_DE_CN_ID!C{src_row})')
     ws.cell(row=out_row, column=4, value=f'=IF({s}="","",{ip})')
-    ws.cell(row=out_row, column=5, value=f'=IF({s}="","",Suiza_DE_CN_ID!D{src_row})')
-    ws.cell(row=out_row, column=6, value=f'=IF({s}="","",Suiza_DE_CN_ID!F{src_row})')
-    ws.cell(row=out_row, column=7, value=f'=IF({s}="","",Suiza_DE_CN_ID!G{src_row})')
-    ws.cell(row=out_row, column=8, value=f'=IF({s}="","",Suiza_DE_CN_ID!H{src_row})')
+    ws.cell(row=out_row, column=5, value=f'=IF({s}="","",Suiza_DE_CN_ID!E{src_row})')
+    ws.cell(row=out_row, column=6, value=f'=IF({s}="","",Suiza_DE_CN_ID!G{src_row})')
+    ws.cell(row=out_row, column=7, value=f'=IF({s}="","",Suiza_DE_CN_ID!H{src_row})')
+    ws.cell(row=out_row, column=8, value=f'=IF({s}="","",Suiza_DE_CN_ID!I{src_row})')
     ws.cell(row=out_row, column=9, value=f'=IF({s}="","",{origen})')
     ws.cell(row=out_row, column=10,
             value=f'=IF({s}="","",IFERROR(INDEX({gcat_cat},MATCH({ip},{gcat_code},0)),"Revisar Ip Code"))')
