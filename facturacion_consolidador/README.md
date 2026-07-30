@@ -30,4 +30,12 @@ Tscode; Suiza no, así que su Tscode se **autocompleta por fórmula** buscando e
    python3 build_consolidador.py /ruta/a/Gamma.xls /ruta/a/mercados.xlsx Consolidador_Facturacion.xlsx
    ```
 
+6. Para agregar/actualizar la pestaña **Resumen** (mercado | Quantity | Amount | Goods Origin |
+   Category | R/C | Mks description, con fórmulas SUMIFS contra Consolidado) una vez que el
+   libro ya tiene los datos del mes pegados y recalculados:
+
+   ```
+   python3 build_resumen.py Consolidador_Facturacion.xlsx
+   ```
+
 Instrucciones detalladas dentro del propio libro, pestaña **Instrucciones**.
