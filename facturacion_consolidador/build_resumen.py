@@ -12,6 +12,7 @@ IN_OUT = sys.argv[1] if len(sys.argv) > 1 else "Consolidador_Facturacion.xlsx"
 FONT_NAME = "Arial"
 HEADER_FILL = PatternFill("solid", fgColor="1F4E78")
 HEADER_FONT = Font(name=FONT_NAME, bold=True, color="FFFFFF")
+BOLD = Font(name=FONT_NAME, bold=True)
 thin = Side(style="thin", color="BFBFBF")
 BORDER = Border(left=thin, right=thin, top=thin, bottom=thin)
 
@@ -29,22 +30,24 @@ df_full = pd.read_excel(IN_OUT, sheet_name="Consolidado", header=0)
 CONSOL_LAST_ROW = 1 + len(df_full)
 df = df_full[df_full["cliente"].notna()]
 
-grouped = (
-    df.groupby(["mercado", "Goods Origin", "Category", "R/C", "Mks description"], dropna=False)
-    .size()
-    .reset_index()[["mercado", "Goods Origin", "Category", "R/C", "Mks description"]]
-    .sort_values(["mercado", "Goods Origin", "Category", "R/C", "Mks description"])
-)
+mercados = sorted(df["mercado"].dropna().unique())
+segmentos = sorted(df["Mks description"].dropna().unique())
 
 wb = load_workbook(IN_OUT)
 if "Resumen" in wb.sheetnames:
     del wb["Resumen"]
 ws = wb.create_sheet("Resumen")
 
-headers = ["mercado", "Quantity", "Amount", "Goods Origin", "Category", "R/C", "Mks description"]
-for c, h in enumerate(headers, start=1):
-    ws.cell(row=1, column=c, value=h)
-style_header(ws, 1, len(headers))
+ws["A1"] = "Piezas facturadas por mercado y segmento (Mks description), y Amount total por mercado"
+ws["A1"].font = Font(name=FONT_NAME, italic=True, color="7F7F7F")
+
+HEADER_ROW = 3
+ws.cell(row=HEADER_ROW, column=1, value="mercado")
+for j, seg in enumerate(segmentos, start=2):
+    ws.cell(row=HEADER_ROW, column=j, value=seg)
+amount_col = len(segmentos) + 2
+ws.cell(row=HEADER_ROW, column=amount_col, value="Amount Total")
+style_header(ws, HEADER_ROW, amount_col)
 
 def col_rng(col):
     return f"Consolidado!${col}$2:${col}${CONSOL_LAST_ROW}"
@@ -52,38 +55,33 @@ def col_rng(col):
 mercado_rng = col_rng("A")
 qty_rng = col_rng("F")
 amount_rng = col_rng("H")
-origen_rng = col_rng("I")
-cat_rng = col_rng("J")
-rc_rng = col_rng("K")
 mks_rng = col_rng("L")
 
-r = 2
-for _, row in grouped.iterrows():
-    ws.cell(row=r, column=1, value=row["mercado"])
-    ws.cell(row=r, column=4, value=row["Goods Origin"])
-    ws.cell(row=r, column=5, value=row["Category"])
-    ws.cell(row=r, column=6, value=row["R/C"])
-    ws.cell(row=r, column=7, value=row["Mks description"])
-    ws.cell(
-        row=r, column=2,
-        value=f'=SUMIFS({qty_rng},{mercado_rng},A{r},{origen_rng},D{r},{cat_rng},E{r},{rc_rng},F{r},{mks_rng},G{r})'
-    )
-    ws.cell(
-        row=r, column=3,
-        value=f'=SUMIFS({amount_rng},{mercado_rng},A{r},{origen_rng},D{r},{cat_rng},E{r},{rc_rng},F{r},{mks_rng},G{r})'
-    )
+r = HEADER_ROW + 1
+for mercado in mercados:
+    ws.cell(row=r, column=1, value=mercado)
+    for j, seg in enumerate(segmentos, start=2):
+        col_letter = get_column_letter(j)
+        ws.cell(
+            row=r, column=j,
+            value=f'=SUMIFS({qty_rng},{mercado_rng},$A{r},{mks_rng},{col_letter}${HEADER_ROW})'
+        )
+    ws.cell(row=r, column=amount_col, value=f'=SUMIFS({amount_rng},{mercado_rng},$A{r})')
     r += 1
 last_row = r - 1
 
 total_row = r
-ws.cell(row=total_row, column=1, value="Total").font = Font(name=FONT_NAME, bold=True)
-ws.cell(row=total_row, column=2, value=f"=SUM(B2:B{last_row})").font = Font(name=FONT_NAME, bold=True)
-ws.cell(row=total_row, column=3, value=f"=SUM(C2:C{last_row})").font = Font(name=FONT_NAME, bold=True)
+ws.cell(row=total_row, column=1, value="Total").font = BOLD
+for j in range(2, amount_col + 1):
+    col_letter = get_column_letter(j)
+    cell = ws.cell(row=total_row, column=j, value=f"=SUM({col_letter}{HEADER_ROW + 1}:{col_letter}{last_row})")
+    cell.font = BOLD
 
-for i, w in enumerate([16, 11, 13, 13, 14, 8, 26], start=1):
+widths = [16] + [14] * len(segmentos) + [14]
+for i, w in enumerate(widths, start=1):
     ws.column_dimensions[get_column_letter(i)].width = w
-ws.freeze_panes = "A2"
-ws.auto_filter.ref = f"A1:G{last_row}"
+ws.freeze_panes = f"B{HEADER_ROW + 1}"
+ws.auto_filter.ref = f"A{HEADER_ROW}:{get_column_letter(amount_col)}{last_row}"
 
 wb.save(IN_OUT)
-print("saved", IN_OUT, "resumen rows:", last_row - 1)
+print("saved", IN_OUT, "mercados:", len(mercados), "segmentos:", len(segmentos))

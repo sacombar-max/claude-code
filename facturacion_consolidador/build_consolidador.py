@@ -96,9 +96,11 @@ lines = [
     "   China e Indonesia), respetando las columnas: cliente, pf, Ip Code, Description, Brand Line, Quantity, Net Price,",
     "   Amount, Goods Origin. La columna 'Tscode (automático)' NO se pega: se autocompleta sola buscando el nombre de",
     "   'cliente' en la columna Alias de la pestaña 'Mercados'. Si un cliente nuevo no aparece, agrégalo ahí (ver punto 6).",
-    "3. La pestaña 'Consolidado' se arma sola con fórmulas y está protegida contra edición para evitar romperla por accidente.",
-    "   Para borrar la fila de ejemplo en 'Brasil' o 'Suiza_DE_CN_ID': selecciona las celdas y presiona Supr/Delete.",
-    "   NO uses clic derecho > 'Eliminar fila' (Delete Row), porque eso corre las fórmulas de Consolidado y las rompe.",
+    "3. La pestaña 'Consolidado' se arma sola con fórmulas. NO está protegida a propósito, para poder armar tablas",
+    "   dinámicas y gráficos directamente sobre ella. Por eso mismo no la edites/arrastres/borres filas a mano ahí",
+    "   (rompe las fórmulas) — para otra vista, créala en una pestaña nueva. Para borrar la fila de ejemplo en 'Brasil'",
+    "   o 'Suiza_DE_CN_ID': selecciona las celdas y presiona Supr/Delete. NO uses clic derecho > 'Eliminar fila'",
+    "   (Delete Row), porque eso corre las fórmulas de Consolidado y las rompe.",
     "4. 'mercado' = país del CLIENTE (no el país de fabricación): se busca el Tscode de cada fila en la pestaña 'Mercados'.",
     "   'Goods Origin' sigue siendo el país de fabricación del producto (BR para Brasil, o el código que traiga cada fila de Suiza).",
     "5. La pestaña 'Gamma_Catalogo' es la tabla de referencia (catálogo de productos) usada para completar Category, R/C y",
@@ -268,8 +270,7 @@ for src_row in range(2, SUIZA_LAST_ROW + 1):
 autofit(ws, [12, 24, 14, 10, 32, 10, 11, 12, 13, 14, 8, 26])
 ws.freeze_panes = "A2"
 ws.auto_filter.ref = f"A1:L{out_row - 1}"
-ws.protection.sheet = True  # evita editar/arrastrar/borrar filas por accidente en esta pestaña
-ws.protection.autoFilter = False  # permite usar los filtros aunque la hoja esté protegida
+# Sin protección: se deja libre para poder armar tablas dinámicas y gráficos desde aquí.
 
 wb.save(OUT)
 print("saved", OUT, "gamma rows:", GAMMA_ROWS, "gamma last row:", GAMMA_LAST_ROW,
