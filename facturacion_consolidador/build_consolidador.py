@@ -66,7 +66,9 @@ lines = [
     "2. Pestaña 'Suiza_DE_CN_ID': borra la fila de ejemplo y pega los datos del archivo que envía Suiza (agrupa Alemania,",
     "   China e Indonesia), respetando las columnas: cliente, Tscode, pf, Ip Code, Description, Brand Line, Quantity, Net Price,",
     "   Amount, Goods Origin.",
-    "3. La pestaña 'Consolidado' se arma sola con fórmulas: no escribas nada ahí a mano.",
+    "3. La pestaña 'Consolidado' se arma sola con fórmulas y está protegida contra edición para evitar romperla por accidente.",
+    "   Para borrar la fila de ejemplo en 'Brasil' o 'Suiza_DE_CN_ID': selecciona las celdas y presiona Supr/Delete.",
+    "   NO uses clic derecho > 'Eliminar fila' (Delete Row), porque eso corre las fórmulas de Consolidado y las rompe.",
     "4. 'mercado' = país del CLIENTE (no el país de fabricación): se busca el Tscode de cada fila en la pestaña 'Mercados'.",
     "   'Goods Origin' sigue siendo el país de fabricación del producto (BR para Brasil, o el código que traiga cada fila de Suiza).",
     "5. La pestaña 'Gamma_Catalogo' es la tabla de referencia (catálogo de productos) usada para completar Category, R/C y",
@@ -216,6 +218,7 @@ for src_row in range(2, SUIZA_LAST_ROW + 1):
 
 autofit(ws, [12, 24, 14, 10, 32, 10, 11, 12, 13, 14, 8, 26])
 ws.freeze_panes = "A2"
+ws.protection.sheet = True  # evita editar/arrastrar/borrar filas por accidente en esta pestaña
 
 wb.save(OUT)
 print("saved", OUT, "gamma rows:", GAMMA_ROWS, "gamma last row:", GAMMA_LAST_ROW,
