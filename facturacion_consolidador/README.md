@@ -8,13 +8,21 @@ Brasil, China, Alemania e Indonesia en un solo formato:
 `mercado` es el país del **cliente** (se busca por Tscode en la pestaña `Mercados`), no el país
 de fabricación — ese es `Goods Origin`.
 
+La pestaña **Mercados** tiene 3 columnas: `Tscode | Alias | Mercado`. Brasil ya trae su propio
+Tscode; Suiza no, así que su Tscode se **autocompleta por fórmula** buscando el nombre de
+`cliente` contra la columna `Alias`.
+
 ## Uso mensual
 
 1. Pega los datos de Brasil en la pestaña **Brasil** (reemplaza la fila de ejemplo).
 2. Pega los datos del archivo de Suiza (agrupa Alemania, China e Indonesia) en la
-   pestaña **Suiza_DE_CN_ID**, incluyendo su columna Tscode.
-3. La pestaña **Consolidado** se arma sola con fórmulas.
-4. Si aparece "Revisar Tscode", agrega ese Tscode y su mercado en la pestaña **Mercados**.
+   pestaña **Suiza_DE_CN_ID** — sin Tscode, esa columna se calcula sola.
+3. La pestaña **Consolidado** se arma sola con fórmulas y está protegida contra edición
+   (los filtros sí funcionan; solo no se puede escribir/arrastrar ahí).
+4. Si aparece "Revisar Tscode", falta ese Tscode en **Mercados**. Si en Suiza aparece
+   "Revisar alias", el nombre de `cliente` no coincide con ningún Alias — agrega una fila
+   en **Mercados** (Tscode | Alias | Mercado) escribiendo el texto directamente, sin copiar
+   celdas desde otro Excel abierto (eso puede pegar un vínculo roto en vez del texto).
 5. Si llega una versión nueva del catálogo de productos Gamma o de la tabla de mercados,
    regenera el libro corriendo:
 

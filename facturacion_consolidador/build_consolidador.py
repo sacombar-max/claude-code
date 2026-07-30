@@ -28,6 +28,35 @@ mercados.columns = ["Tscode", "Mercado"]
 mercados = mercados.drop_duplicates(subset=["Tscode"]).sort_values("Tscode")
 MERCADOS_ROWS = len(mercados)
 
+# Alias de cliente (tal como aparece en la columna 'cliente' del archivo de Suiza) -> Tscode.
+# Con esto Suiza no necesita traer el Tscode manualmente: se autocompleta buscando el alias aquí.
+# Para un cliente nuevo, basta con agregar su alias y Tscode en la pestaña 'Mercados'.
+ALIAS_TSCODE = {
+    "PETIN": "TS01696",
+    "YAMAHA": "TS01886",
+    "ITALCAUCHOS": "TS01916",
+    "AUTOCENTRO": "TS01927",
+    "CENEU": "TS01928",
+    "DESERT": "TS01932",
+    "ISN S.": "TS02378",
+    "MOTORALMOR": "TS02414",
+    "FAHONDA": "TS02459",
+    "AKT": "TS02472",
+    "MOAUTO": "TS02592",
+    "AUTECO": "TS02793",
+    "GEES": "TS02815",
+    "ROLPARTS": "TS02816",
+    "RENDILLANTAS": "TS02839",
+    "PRESTIGE": "TS02848",
+    "INTEGRANDO": "TS02861",
+    "BRIFABRI": "TS02865",
+    "FANALCA": "TS03434",
+    "MULTILLANTA": "TS06007",
+}
+alias_by_tscode = {}
+for alias_name, ts in ALIAS_TSCODE.items():
+    alias_by_tscode.setdefault(ts, []).append(alias_name)
+
 FONT_NAME = "Arial"
 HEADER_FILL = PatternFill("solid", fgColor="1F4E78")
 HEADER_FONT = Font(name=FONT_NAME, bold=True, color="FFFFFF")
@@ -64,8 +93,9 @@ lines = [
     "1. Pestaña 'Brasil': borra la fila de ejemplo (fondo amarillo) y pega debajo los datos del mes tal como llegan de Brasil,",
     "   respetando las columnas: Proforma, Tscode, Cliente, Qty, Ipcode, Description, Sales force, Price USD.",
     "2. Pestaña 'Suiza_DE_CN_ID': borra la fila de ejemplo y pega los datos del archivo que envía Suiza (agrupa Alemania,",
-    "   China e Indonesia), respetando las columnas: cliente, Tscode, pf, Ip Code, Description, Brand Line, Quantity, Net Price,",
-    "   Amount, Goods Origin.",
+    "   China e Indonesia), respetando las columnas: cliente, pf, Ip Code, Description, Brand Line, Quantity, Net Price,",
+    "   Amount, Goods Origin. La columna 'Tscode (automático)' NO se pega: se autocompleta sola buscando el nombre de",
+    "   'cliente' en la columna Alias de la pestaña 'Mercados'. Si un cliente nuevo no aparece, agrégalo ahí (ver punto 6).",
     "3. La pestaña 'Consolidado' se arma sola con fórmulas y está protegida contra edición para evitar romperla por accidente.",
     "   Para borrar la fila de ejemplo en 'Brasil' o 'Suiza_DE_CN_ID': selecciona las celdas y presiona Supr/Delete.",
     "   NO uses clic derecho > 'Eliminar fila' (Delete Row), porque eso corre las fórmulas de Consolidado y las rompe.",
@@ -73,31 +103,39 @@ lines = [
     "   'Goods Origin' sigue siendo el país de fabricación del producto (BR para Brasil, o el código que traiga cada fila de Suiza).",
     "5. La pestaña 'Gamma_Catalogo' es la tabla de referencia (catálogo de productos) usada para completar Category, R/C y",
     "   Mks description por Ip Code. Cuando recibas una versión nueva del archivo Gamma, reemplaza estos datos.",
-    "6. La pestaña 'Mercados' traduce el Tscode del cliente a su mercado (país/región). Si aparece un Tscode nuevo que no",
-    "   está en la lista, agrégalo ahí (columna Tscode | columna Mercado).",
+    "6. La pestaña 'Mercados' tiene 3 columnas: Tscode | Alias | Mercado. Si aparece un Tscode nuevo (cliente de Brasil) o",
+    "   un cliente nuevo de Suiza sin alias todavía, agrega una fila con su Tscode, su alias (tal como aparece en la columna",
+    "   'cliente' de Suiza) y su mercado. Escribe el texto directamente — no copies celdas desde otro archivo Excel abierto,",
+    "   porque eso puede pegar un vínculo roto a ese otro archivo en vez del texto.",
     "",
     f"Capacidad actual: {BRASIL_CAP} filas de datos para Brasil y {SUIZA_CAP} filas para Suiza (con margen sobre el volumen",
     "mensual observado: ~517 filas Brasil, ~343 filas Suiza). Si algún mes se supera la capacidad, avisa para ampliar las filas.",
     "",
-    "Si en 'Consolidado' una fila muestra 'Revisar Tscode', el Tscode del cliente no está en la pestaña 'Mercados' (agrégalo ahí).",
+    "Si en 'Consolidado' una fila muestra 'Revisar Tscode', el Tscode no está en la pestaña 'Mercados' (agrégalo ahí).",
+    "Si en 'Suiza_DE_CN_ID' la columna Tscode muestra 'Revisar alias', el nombre de 'cliente' no coincide con ningún Alias",
+    "de 'Mercados' (agrega el alias, o revisa que esté escrito igual).",
     "Si muestra 'Revisar Ip Code' en Category/R-C/Mks description, el Ip Code no está en 'Gamma_Catalogo' (código nuevo o catálogo desactualizado).",
 ]
 for i, txt in enumerate(lines, start=2):
     ws.cell(row=i, column=1, value=txt).font = NOTE_FONT if txt else NOTE_FONT
 autofit(ws, [130])
 
-# ================= Mercados (Tscode -> Mercado del cliente) =================
+# ================= Mercados (Tscode -> Mercado del cliente, + Alias -> Tscode) =================
 ws = wb.create_sheet("Mercados")
 ws["A1"] = "Tscode"
-ws["B1"] = "Mercado"
-style_header(ws, 1, 2)
+ws["B1"] = "Alias"
+ws["C1"] = "Mercado"
+style_header(ws, 1, 3)
 r = 2
 for _, row in mercados.iterrows():
-    ws.cell(row=r, column=1, value=row["Tscode"]).font = BLUE_INPUT
-    ws.cell(row=r, column=2, value=row["Mercado"]).font = BLUE_INPUT
+    ts = row["Tscode"]
+    aliases = alias_by_tscode.get(ts, [])
+    ws.cell(row=r, column=1, value=ts).font = BLUE_INPUT
+    ws.cell(row=r, column=2, value=", ".join(aliases) if aliases else None).font = BLUE_INPUT
+    ws.cell(row=r, column=3, value=row["Mercado"]).font = BLUE_INPUT
     r += 1
 MERCADOS_LAST_ROW = r - 1
-autofit(ws, [14, 24])
+autofit(ws, [14, 18, 24])
 ws.freeze_panes = "A2"
 
 # ================= Gamma_Catalogo =================
@@ -138,17 +176,27 @@ BRASIL_LAST_ROW = 1 + BRASIL_CAP
 
 # ================= Suiza_DE_CN_ID =================
 ws = wb.create_sheet("Suiza_DE_CN_ID")
-s_headers = ["cliente", "Tscode", "pf", "Ip Code", "Description", "Brand Line", "Quantity", "Net Price", "Amount", "Goods Origin"]
+s_headers = ["cliente", "Tscode (automático)", "pf", "Ip Code", "Description", "Brand Line", "Quantity", "Net Price", "Amount", "Goods Origin"]
 for c, h in enumerate(s_headers, start=1):
     ws.cell(row=1, column=c, value=h)
 style_header(ws, 1, len(s_headers))
-example = ["akt (EJEMPLO - BORRAR)", "TS02793", 1730134137, 2283700, "180/55ZR17M/CTL (73W)(M) Z8-R",
+example = ["akt", None, 1730134137, 2283700, "180/55ZR17M/CTL (73W)(M) Z8-R",
            "Moto METZELER", 3, 102, 327.3, "CN"]
 for c, v in enumerate(example, start=1):
     cell = ws.cell(row=2, column=c, value=v)
     cell.fill = EXAMPLE_FILL
     cell.font = BLACK
-autofit(ws, [24, 12, 14, 10, 32, 16, 10, 11, 11, 13])
+_mercados_tscode = f"Mercados!$A$2:$A${MERCADOS_LAST_ROW}"
+_mercados_alias = f"Mercados!$B$2:$B${MERCADOS_LAST_ROW}"
+for r in range(2, 2 + SUIZA_CAP):
+    a = f"A{r}"
+    cell = ws.cell(
+        row=r, column=2,
+        value=f'=IF({a}="","",IFERROR(INDEX({_mercados_tscode},MATCH({a},{_mercados_alias},0)),"Revisar alias"))'
+    )
+    if r == 2:
+        cell.fill = EXAMPLE_FILL
+autofit(ws, [24, 16, 14, 10, 32, 16, 10, 11, 11, 13])
 ws.freeze_panes = "A2"
 SUIZA_LAST_ROW = 1 + SUIZA_CAP
 
@@ -165,7 +213,8 @@ gcat_rc = f"Gamma_Catalogo!$C$3:$C${GAMMA_LAST_ROW}"
 gcat_cat = f"Gamma_Catalogo!$D$3:$D${GAMMA_LAST_ROW}"
 gcat_mks = f"Gamma_Catalogo!$E$3:$E${GAMMA_LAST_ROW}"
 tscode_col = f"Mercados!$A$2:$A${MERCADOS_LAST_ROW}"
-mercado_col = f"Mercados!$B$2:$B${MERCADOS_LAST_ROW}"
+alias_col = f"Mercados!$B$2:$B${MERCADOS_LAST_ROW}"
+mercado_col = f"Mercados!$C$2:$C${MERCADOS_LAST_ROW}"
 
 out_row = 2
 
@@ -218,7 +267,9 @@ for src_row in range(2, SUIZA_LAST_ROW + 1):
 
 autofit(ws, [12, 24, 14, 10, 32, 10, 11, 12, 13, 14, 8, 26])
 ws.freeze_panes = "A2"
+ws.auto_filter.ref = f"A1:L{out_row - 1}"
 ws.protection.sheet = True  # evita editar/arrastrar/borrar filas por accidente en esta pestaña
+ws.protection.autoFilter = False  # permite usar los filtros aunque la hoja esté protegida
 
 wb.save(OUT)
 print("saved", OUT, "gamma rows:", GAMMA_ROWS, "gamma last row:", GAMMA_LAST_ROW,
