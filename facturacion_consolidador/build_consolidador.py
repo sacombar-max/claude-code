@@ -103,6 +103,8 @@ lines = [
     "   (Delete Row), porque eso corre las fórmulas de Consolidado y las rompe.",
     "4. 'mercado' = país del CLIENTE (no el país de fabricación): se busca el Tscode de cada fila en la pestaña 'Mercados'.",
     "   'Goods Origin' sigue siendo el país de fabricación del producto (BR para Brasil, o el código que traiga cada fila de Suiza).",
+    "   'Fuente' indica de dónde vino la fila: 'Brasil' (pestaña Brasil, en Excel) o 'Suiza' (pestaña Suiza_DE_CN_ID,",
+    "   que agrupa Alemania/China/Indonesia, ya sea desde el Excel de Suiza o desde los PDF de proforma).",
     "5. La pestaña 'Gamma_Catalogo' es la tabla de referencia (catálogo de productos) usada para completar Category, R/C y",
     "   Mks description por Ip Code. Cuando recibas una versión nueva del archivo Gamma, reemplaza estos datos.",
     "6. La pestaña 'Mercados' tiene 3 columnas: Tscode | Alias | Mercado. Si aparece un Tscode nuevo (cliente de Brasil) o",
@@ -205,7 +207,7 @@ SUIZA_LAST_ROW = 1 + SUIZA_CAP
 # ================= Consolidado =================
 ws = wb.create_sheet("Consolidado")
 c_headers = ["mercado", "cliente", "pf", "Ip Code", "Description", "Quantity", "Net Price",
-             "Amount", "Goods Origin", "Category", "R/C", "Mks description"]
+             "Amount", "Goods Origin", "Category", "R/C", "Mks description", "Fuente"]
 for c, h in enumerate(c_headers, start=1):
     ws.cell(row=1, column=c, value=h)
 style_header(ws, 1, len(c_headers))
@@ -241,6 +243,7 @@ for src_row in range(2, BRASIL_LAST_ROW + 1):
             value=f'=IF({b}="","",IFERROR(INDEX({gcat_rc},MATCH({ip},{gcat_code},0)),"Revisar Ip Code"))')
     ws.cell(row=out_row, column=12,
             value=f'=IF({b}="","",IFERROR(INDEX({gcat_mks},MATCH({ip},{gcat_code},0)),"Revisar Ip Code"))')
+    ws.cell(row=out_row, column=13, value=f'=IF({b}="","","Brasil")')
     out_row += 1
 
 # --- bloque Suiza (Alemania + China + Indonesia) ---
@@ -265,11 +268,12 @@ for src_row in range(2, SUIZA_LAST_ROW + 1):
             value=f'=IF({s}="","",IFERROR(INDEX({gcat_rc},MATCH({ip},{gcat_code},0)),"Revisar Ip Code"))')
     ws.cell(row=out_row, column=12,
             value=f'=IF({s}="","",IFERROR(INDEX({gcat_mks},MATCH({ip},{gcat_code},0)),"Revisar Ip Code"))')
+    ws.cell(row=out_row, column=13, value=f'=IF({s}="","","Suiza")')
     out_row += 1
 
-autofit(ws, [12, 24, 14, 10, 32, 10, 11, 12, 13, 14, 8, 26])
+autofit(ws, [12, 24, 14, 10, 32, 10, 11, 12, 13, 14, 8, 26, 10])
 ws.freeze_panes = "A2"
-ws.auto_filter.ref = f"A1:L{out_row - 1}"
+ws.auto_filter.ref = f"A1:M{out_row - 1}"
 # Sin protección: se deja libre para poder armar tablas dinámicas y gráficos desde aquí.
 
 wb.save(OUT)

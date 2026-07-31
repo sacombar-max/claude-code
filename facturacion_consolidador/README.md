@@ -3,10 +3,11 @@
 Libro Excel (`Consolidador_Facturacion.xlsx`) para consolidar la facturación mensual de
 Brasil, China, Alemania e Indonesia en un solo formato:
 
-`mercado | cliente | pf | Ip Code | Description | Quantity | Net Price | Amount | Goods Origin | Category | R/C | Mks description`
+`mercado | cliente | pf | Ip Code | Description | Quantity | Net Price | Amount | Goods Origin | Category | R/C | Mks description | Fuente`
 
 `mercado` es el país del **cliente** (se busca por Tscode en la pestaña `Mercados`), no el país
-de fabricación — ese es `Goods Origin`.
+de fabricación — ese es `Goods Origin`. `Fuente` indica de dónde vino la fila: `Brasil` (pestaña
+Brasil) o `Suiza` (pestaña Suiza_DE_CN_ID, ya sea desde el Excel de Suiza o desde PDFs de proforma).
 
 La pestaña **Mercados** tiene 3 columnas: `Tscode | Alias | Mercado`. Brasil ya trae su propio
 Tscode; Suiza no, así que su Tscode se **autocompleta por fórmula** buscando el nombre de
@@ -39,6 +40,16 @@ Tscode; Suiza no, así que su Tscode se **autocompleta por fórmula** buscando e
    ```
    python3 build_resumen.py Consolidador_Facturacion.xlsx
    ```
+
+7. Para que en **Consolidado** no se vean las filas sin datos (capacidad no usada ese mes),
+   una vez recalculado el libro:
+
+   ```
+   python3 hide_blank_rows.py Consolidador_Facturacion.xlsx
+   ```
+
+   Esto solo oculta filas (no las borra); si el mes siguiente cambia la cantidad de filas con
+   datos, hay que volver a correrlo.
 
 Instrucciones detalladas dentro del propio libro, pestaña **Instrucciones**.
 
