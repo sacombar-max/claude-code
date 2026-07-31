@@ -33,31 +33,28 @@ Tscode; Suiza no, así que su Tscode se **autocompleta por fórmula** buscando e
    python3 build_consolidador.py /ruta/a/Gamma.xls /ruta/a/mercados.xlsx Consolidador_Facturacion.xlsx
    ```
 
-6. Para agregar/actualizar la pestaña **Resumen** (tabla cruzada: mercado en filas, piezas
-   facturadas por cada segmento/Mks description en columnas, y Amount Total por mercado al
-   final) una vez que el libro ya tiene los datos del mes pegados y recalculados:
+6. `build_resumen.py`, `hide_blank_rows.py` y `finalize_delivery.py` (ver abajo) cada uno abre
+   el libro con openpyxl y lo vuelve a guardar — **eso borra los valores calculados de todas
+   las fórmulas del libro**, no solo de lo que cada script toca. Como `hide_blank_rows.py`
+   necesita leer esos valores para saber qué filas están vacías, y `build_resumen.py` los
+   necesita para armar la tabla, **hay que recalcular después de cada uno de estos pasos**, no
+   solo al final:
 
    ```
-   python3 build_resumen.py Consolidador_Facturacion.xlsx
+   python3 recalc.py Consolidador_Facturacion.xlsx      # (script del skill de xlsx, o tu copia)
+
+   python3 build_resumen.py Consolidador_Facturacion.xlsx     # agrega/actualiza Resumen
+   python3 recalc.py Consolidador_Facturacion.xlsx
+
+   python3 hide_blank_rows.py Consolidador_Facturacion.xlsx   # oculta filas sin datos en Consolidado
+   python3 finalize_delivery.py Consolidador_Facturacion.xlsx # quita Instrucciones, oculta Mercados/Gamma_Catalogo
+   python3 recalc.py Consolidador_Facturacion.xlsx      # deja cacheados los valores finales
    ```
 
-7. Para que en **Consolidado** no se vean las filas sin datos (capacidad no usada ese mes),
-   una vez recalculado el libro:
-
-   ```
-   python3 hide_blank_rows.py Consolidador_Facturacion.xlsx
-   ```
-
-   Esto solo oculta filas (no las borra); si el mes siguiente cambia la cantidad de filas con
-   datos, hay que volver a correrlo.
-
-8. Para dejar el libro listo para entregar (sin la pestaña Instrucciones, y solo visibles
-   Brasil, Suiza_DE_CN_ID, Consolidado y Resumen — Mercados y Gamma_Catalogo quedan ocultas,
-   no borradas, y las fórmulas las siguen usando):
-
-   ```
-   python3 finalize_delivery.py Consolidador_Facturacion.xlsx
-   ```
+   `hide_blank_rows.py` solo oculta filas (no las borra); si el mes siguiente cambia la
+   cantidad de filas con datos, hay que volver a correrlo. `finalize_delivery.py` no lee
+   valores calculados, así que puede ir después de `hide_blank_rows.py` sin recalcular entre
+   los dos — pero sí hay que recalcular una última vez después de ambos.
 
 Instrucciones detalladas dentro del propio libro, pestaña **Instrucciones** (mientras no se
 haya corrido `finalize_delivery.py`).
@@ -80,8 +77,10 @@ haya en `Suiza_DE_CN_ID`, no hace falta copiar/pegar):
 ```
 python3 load_pdfs_into_suiza.py Consolidador_Facturacion.xlsx carpeta_con_pdfs/
 python3 recalc.py Consolidador_Facturacion.xlsx      # desde el skill de xlsx, o tu copia
-python3 build_resumen.py Consolidador_Facturacion.xlsx   # opcional, actualiza el Resumen
 ```
+
+Y sigue con el resto del flujo del punto 6 de arriba (build_resumen → recalc → hide_blank_rows
+→ finalize_delivery → recalc).
 
 Si prefieres revisar los datos en un Excel aparte antes de pegarlos, `parse_proformas_pdf.py`
 hace lo mismo pero deja el resultado en un archivo suelto en vez de escribirlo en el libro:

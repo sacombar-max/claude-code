@@ -44,7 +44,7 @@ def parse_pdf(path):
             goods_origin = COUNTRY_TO_CODE.get(m.group(1).upper(), m.group(1).upper())
         m = re.search(r"Order N°\s+(\d+)", line)
         if m:
-            pf = m.group(1)
+            pf = int(m.group(1))
 
     if not (tscode and cliente and pf):
         raise ValueError(f"{path}: no se pudo leer Tscode/cliente/pf del encabezado")
@@ -59,7 +59,7 @@ def parse_pdf(path):
             "cliente": cliente,
             "Tscode": tscode,
             "pf": pf,
-            "Ip Code": ip_code,
+            "Ip Code": int(ip_code),
             "Description": description,
             "Brand Line": brand_line,
             "Quantity": int(qty),
