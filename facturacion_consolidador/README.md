@@ -41,3 +41,19 @@ Tscode; Suiza no, así que su Tscode se **autocompleta por fórmula** buscando e
    ```
 
 Instrucciones detalladas dentro del propio libro, pestaña **Instrucciones**.
+
+## Cuando los otros orígenes llegan en PDF (proforma individual) en vez de Excel
+
+Si en lugar del Excel de Suiza llegan proformas en PDF (formato "PIRELLI TYRE (SUISSE) SA",
+una por cliente/pedido), `parse_proformas_pdf.py` las lee y arma una tabla con las mismas
+columnas de `Suiza_DE_CN_ID` (cliente, Tscode, pf, Ip Code, Description, Brand Line, Quantity,
+Net Price, Amount, Goods Origin) — el Tscode y el país de despacho salen del propio PDF, no
+hace falta alias:
+
+```
+pip install -r requirements.txt   # una sola vez: pandas, openpyxl, pdfplumber
+python3 parse_proformas_pdf.py carpeta_con_pdfs/ -o suiza_desde_pdf.xlsx
+```
+
+Acepta varios PDFs o una carpeta entera. El resultado (`suiza_desde_pdf.xlsx`) se pega tal
+cual en `Suiza_DE_CN_ID` (respetando el orden de columnas).
