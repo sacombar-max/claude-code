@@ -52,8 +52,22 @@ hace falta alias:
 
 ```
 pip install -r requirements.txt   # una sola vez: pandas, openpyxl, pdfplumber
+```
+
+Con 15-20 PDFs al mes, lo más simple es que se escriban directo en el libro (reemplaza lo que
+haya en `Suiza_DE_CN_ID`, no hace falta copiar/pegar):
+
+```
+python3 load_pdfs_into_suiza.py Consolidador_Facturacion.xlsx carpeta_con_pdfs/
+python3 recalc.py Consolidador_Facturacion.xlsx      # desde el skill de xlsx, o tu copia
+python3 build_resumen.py Consolidador_Facturacion.xlsx   # opcional, actualiza el Resumen
+```
+
+Si prefieres revisar los datos en un Excel aparte antes de pegarlos, `parse_proformas_pdf.py`
+hace lo mismo pero deja el resultado en un archivo suelto en vez de escribirlo en el libro:
+
+```
 python3 parse_proformas_pdf.py carpeta_con_pdfs/ -o suiza_desde_pdf.xlsx
 ```
 
-Acepta varios PDFs o una carpeta entera. El resultado (`suiza_desde_pdf.xlsx`) se pega tal
-cual en `Suiza_DE_CN_ID` (respetando el orden de columnas).
+Ambos aceptan varios PDFs sueltos o una carpeta entera.

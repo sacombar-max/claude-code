@@ -73,6 +73,17 @@ def parse_pdf(path):
     return rows
 
 
+def collect_pdfs(args):
+    pdf_paths = []
+    for a in args:
+        p = Path(a)
+        if p.is_dir():
+            pdf_paths.extend(sorted(p.glob("*.pdf")))
+        else:
+            pdf_paths.append(p)
+    return pdf_paths
+
+
 def main():
     args = sys.argv[1:]
     if "-o" in args:
@@ -82,14 +93,7 @@ def main():
     else:
         out_path = "suiza_desde_pdf.xlsx"
 
-    pdf_paths = []
-    for a in args:
-        p = Path(a)
-        if p.is_dir():
-            pdf_paths.extend(sorted(p.glob("*.pdf")))
-        else:
-            pdf_paths.append(p)
-
+    pdf_paths = collect_pdfs(args)
     if not pdf_paths:
         print("Uso: python parse_proformas_pdf.py carpeta_o_archivos.pdf [...] -o salida.xlsx")
         sys.exit(1)
