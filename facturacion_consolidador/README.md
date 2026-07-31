@@ -51,7 +51,16 @@ Tscode; Suiza no, así que su Tscode se **autocompleta por fórmula** buscando e
    Esto solo oculta filas (no las borra); si el mes siguiente cambia la cantidad de filas con
    datos, hay que volver a correrlo.
 
-Instrucciones detalladas dentro del propio libro, pestaña **Instrucciones**.
+8. Para dejar el libro listo para entregar (sin la pestaña Instrucciones, y solo visibles
+   Brasil, Suiza_DE_CN_ID, Consolidado y Resumen — Mercados y Gamma_Catalogo quedan ocultas,
+   no borradas, y las fórmulas las siguen usando):
+
+   ```
+   python3 finalize_delivery.py Consolidador_Facturacion.xlsx
+   ```
+
+Instrucciones detalladas dentro del propio libro, pestaña **Instrucciones** (mientras no se
+haya corrido `finalize_delivery.py`).
 
 ## Cuando los otros orígenes llegan en PDF (proforma individual) en vez de Excel
 
