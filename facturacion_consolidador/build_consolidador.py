@@ -25,6 +25,17 @@ mercados_raw = pd.read_excel(MERCADOS_XLSX, sheet_name="Sheet2", header=2)
 mercados_raw["Market"] = mercados_raw["Market"].ffill()
 mercados = mercados_raw.dropna(subset=["Customer Hierarchy 3 Code"])[["Customer Hierarchy 3 Code", "Market"]]
 mercados.columns = ["Tscode", "Mercado"]
+
+# Tscodes confirmados manualmente que no vienen en el export de mercados.xlsx.
+EXTRA_TSCODE_MERCADO = {
+    "TS01790": "774 - CHILE",  # COMERCIAL MX S.A.
+    "TS06039": "774 - CHILE",  # Colombia Motos Limitada (COLMOTOS) - código nuevo, misma empresa que 0007510593
+}
+mercados = pd.concat([
+    mercados,
+    pd.DataFrame([{"Tscode": k, "Mercado": v} for k, v in EXTRA_TSCODE_MERCADO.items()]),
+], ignore_index=True)
+
 mercados = mercados.drop_duplicates(subset=["Tscode"]).sort_values("Tscode")
 MERCADOS_ROWS = len(mercados)
 
