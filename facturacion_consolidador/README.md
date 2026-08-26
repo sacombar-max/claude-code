@@ -3,11 +3,14 @@
 Libro Excel (`Consolidador_Facturacion.xlsx`) para consolidar la facturación mensual de
 Brasil, China, Alemania e Indonesia en un solo formato:
 
-`mercado | cliente | pf | Ip Code | Description | Quantity | Net Price | Amount | Goods Origin | Category | R/C | Mks description | Fuente`
+`mercado | cliente | pf | Ip Code | Description | Quantity | FAC | SEP | Net Price | Amount | Goods Origin | Category | R/C | Mks description | Fuente`
 
 `mercado` es el país del **cliente** (se busca por Tscode en la pestaña `Mercados`), no el país
 de fabricación — ese es `Goods Origin`. `Fuente` indica de dónde vino la fila: `Brasil` (pestaña
 Brasil) o `Suiza` (pestaña Suiza_DE_CN_ID, ya sea desde el Excel de Suiza o desde PDFs de proforma).
+`FAC` (piezas ya facturadas este mes) y `SEP` (piezas que quedan para el mes siguiente) son las
+**únicas** columnas de Consolidado pensadas para llenarse a mano, fila por fila — todas las demás
+son fórmula y no deben tocarse.
 
 La pestaña **Mercados** tiene 3 columnas: `Tscode | Alias | Mercado`. Brasil ya trae su propio
 Tscode; Suiza no, así que su Tscode se **autocompleta por fórmula** buscando el nombre de
@@ -26,8 +29,21 @@ Tscode; Suiza no, así que su Tscode se **autocompleta por fórmula** buscando e
    "Revisar alias", el nombre de `cliente` no coincide con ningún Alias — agrega una fila
    en **Mercados** (Tscode | Alias | Mercado) escribiendo el texto directamente, sin copiar
    celdas desde otro Excel abierto (eso puede pegar un vínculo roto en vez del texto).
-5. Si llega una versión nueva del catálogo de productos Gamma o de la tabla de mercados,
-   regenera el libro corriendo:
+5. Si llega una versión nueva del catálogo de productos Gamma, **no la pegues directamente en
+   la pestaña Gamma_Catalogo** (aunque esté oculta) — eso puede traer fórmulas u otros formatos
+   que no funcionan ahí y romper Consolidado. Usa en cambio:
+
+   ```
+   python3 update_gamma_catalog.py Consolidador_Facturacion.xlsx catalogo_nuevo.xlsx
+   ```
+
+   donde `catalogo_nuevo.xlsx` tiene solo estas 5 columnas, en este orden, como valores (no
+   fórmulas): Ip Code, Description, R/C, Category, Mks description. El script reemplaza el
+   catálogo y ajusta automáticamente el rango de las fórmulas de Consolidado que lo consultan.
+   Recalcula después.
+
+   Si en cambio lo que cambió es la tabla de mercados (`mercados.xlsx`), regenera el libro base
+   completo (esto sí reconstruye todo desde cero, no solo el catálogo):
 
    ```
    python3 build_consolidador.py /ruta/a/Gamma.xls /ruta/a/mercados.xlsx Consolidador_Facturacion.xlsx

@@ -54,8 +54,8 @@ def col_rng(col):
 
 mercado_rng = col_rng("A")
 qty_rng = col_rng("F")
-amount_rng = col_rng("H")
-mks_rng = col_rng("L")
+amount_rng = col_rng("J")
+mks_rng = col_rng("N")
 
 r = HEADER_ROW + 1
 for mercado in mercados:

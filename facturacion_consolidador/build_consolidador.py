@@ -217,11 +217,13 @@ SUIZA_LAST_ROW = 1 + SUIZA_CAP
 
 # ================= Consolidado =================
 ws = wb.create_sheet("Consolidado")
-c_headers = ["mercado", "cliente", "pf", "Ip Code", "Description", "Quantity", "Net Price",
-             "Amount", "Goods Origin", "Category", "R/C", "Mks description", "Fuente"]
+c_headers = ["mercado", "cliente", "pf", "Ip Code", "Description", "Quantity", "FAC", "SEP",
+             "Net Price", "Amount", "Goods Origin", "Category", "R/C", "Mks description", "Fuente"]
 for c, h in enumerate(c_headers, start=1):
     ws.cell(row=1, column=c, value=h)
 style_header(ws, 1, len(c_headers))
+# FAC (ya facturado este mes) y SEP (piezas que quedan para septiembre) son las únicas columnas
+# de esta pestaña que se llenan a mano, fila por fila — todo lo demás sigue siendo fórmula.
 
 gcat_code = f"Gamma_Catalogo!$A$3:$A${GAMMA_LAST_ROW}"
 gcat_rc = f"Gamma_Catalogo!$C$3:$C${GAMMA_LAST_ROW}"
@@ -245,16 +247,17 @@ for src_row in range(2, BRASIL_LAST_ROW + 1):
     ws.cell(row=out_row, column=4, value=f'=IF({b}="","",{ip})')
     ws.cell(row=out_row, column=5, value=f'=IF({b}="","",Brasil!F{src_row})')
     ws.cell(row=out_row, column=6, value=f'=IF({b}="","",Brasil!D{src_row})')
-    ws.cell(row=out_row, column=7, value=f'=IF({b}="","",Brasil!H{src_row})')
-    ws.cell(row=out_row, column=8, value=f'=IF({b}="","",Brasil!D{src_row}*Brasil!H{src_row})')
-    ws.cell(row=out_row, column=9, value=f'=IF({b}="","","BR")')
-    ws.cell(row=out_row, column=10,
-            value=f'=IF({b}="","",IFERROR(INDEX({gcat_cat},MATCH({ip},{gcat_code},0)),"Revisar Ip Code"))')
-    ws.cell(row=out_row, column=11,
-            value=f'=IF({b}="","",IFERROR(INDEX({gcat_rc},MATCH({ip},{gcat_code},0)),"Revisar Ip Code"))')
+    # columnas 7 (FAC) y 8 (SEP): en blanco, se llenan a mano
+    ws.cell(row=out_row, column=9, value=f'=IF({b}="","",Brasil!H{src_row})')
+    ws.cell(row=out_row, column=10, value=f'=IF({b}="","",Brasil!D{src_row}*Brasil!H{src_row})')
+    ws.cell(row=out_row, column=11, value=f'=IF({b}="","","BR")')
     ws.cell(row=out_row, column=12,
+            value=f'=IF({b}="","",IFERROR(INDEX({gcat_cat},MATCH({ip},{gcat_code},0)),"Revisar Ip Code"))')
+    ws.cell(row=out_row, column=13,
+            value=f'=IF({b}="","",IFERROR(INDEX({gcat_rc},MATCH({ip},{gcat_code},0)),"Revisar Ip Code"))')
+    ws.cell(row=out_row, column=14,
             value=f'=IF({b}="","",IFERROR(INDEX({gcat_mks},MATCH({ip},{gcat_code},0)),"Revisar Ip Code"))')
-    ws.cell(row=out_row, column=13, value=f'=IF({b}="","","Brasil")')
+    ws.cell(row=out_row, column=15, value=f'=IF({b}="","","Brasil")')
     out_row += 1
 
 # --- bloque Suiza (Alemania + China + Indonesia) ---
@@ -270,21 +273,22 @@ for src_row in range(2, SUIZA_LAST_ROW + 1):
     ws.cell(row=out_row, column=4, value=f'=IF({s}="","",{ip})')
     ws.cell(row=out_row, column=5, value=f'=IF({s}="","",Suiza_DE_CN_ID!E{src_row})')
     ws.cell(row=out_row, column=6, value=f'=IF({s}="","",Suiza_DE_CN_ID!G{src_row})')
-    ws.cell(row=out_row, column=7, value=f'=IF({s}="","",Suiza_DE_CN_ID!H{src_row})')
-    ws.cell(row=out_row, column=8, value=f'=IF({s}="","",Suiza_DE_CN_ID!I{src_row})')
-    ws.cell(row=out_row, column=9, value=f'=IF({s}="","",{origen})')
-    ws.cell(row=out_row, column=10,
-            value=f'=IF({s}="","",IFERROR(INDEX({gcat_cat},MATCH({ip},{gcat_code},0)),"Revisar Ip Code"))')
-    ws.cell(row=out_row, column=11,
-            value=f'=IF({s}="","",IFERROR(INDEX({gcat_rc},MATCH({ip},{gcat_code},0)),"Revisar Ip Code"))')
+    # columnas 7 (FAC) y 8 (SEP): en blanco, se llenan a mano
+    ws.cell(row=out_row, column=9, value=f'=IF({s}="","",Suiza_DE_CN_ID!H{src_row})')
+    ws.cell(row=out_row, column=10, value=f'=IF({s}="","",Suiza_DE_CN_ID!I{src_row})')
+    ws.cell(row=out_row, column=11, value=f'=IF({s}="","",{origen})')
     ws.cell(row=out_row, column=12,
+            value=f'=IF({s}="","",IFERROR(INDEX({gcat_cat},MATCH({ip},{gcat_code},0)),"Revisar Ip Code"))')
+    ws.cell(row=out_row, column=13,
+            value=f'=IF({s}="","",IFERROR(INDEX({gcat_rc},MATCH({ip},{gcat_code},0)),"Revisar Ip Code"))')
+    ws.cell(row=out_row, column=14,
             value=f'=IF({s}="","",IFERROR(INDEX({gcat_mks},MATCH({ip},{gcat_code},0)),"Revisar Ip Code"))')
-    ws.cell(row=out_row, column=13, value=f'=IF({s}="","","Suiza")')
+    ws.cell(row=out_row, column=15, value=f'=IF({s}="","","Suiza")')
     out_row += 1
 
-autofit(ws, [12, 24, 14, 10, 32, 10, 11, 12, 13, 14, 8, 26, 10])
+autofit(ws, [12, 24, 14, 10, 32, 10, 8, 8, 11, 12, 13, 14, 8, 26, 10])
 ws.freeze_panes = "A2"
-ws.auto_filter.ref = f"A1:M{out_row - 1}"
+ws.auto_filter.ref = f"A1:O{out_row - 1}"
 # Sin protección: se deja libre para poder armar tablas dinámicas y gráficos desde aquí.
 
 wb.save(OUT)
