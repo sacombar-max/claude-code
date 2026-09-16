@@ -9,8 +9,8 @@ GAMMA_XLS = sys.argv[1] if len(sys.argv) > 1 else "Gamma.xls"
 MERCADOS_XLSX = sys.argv[2] if len(sys.argv) > 2 else "mercados.xlsx"
 OUT = sys.argv[3] if len(sys.argv) > 3 else "Consolidador_Facturacion.xlsx"
 
-BRASIL_CAP = 650   # filas de datos disponibles para Brasil (~517 filas/mes observadas)
-SUIZA_CAP = 450    # filas de datos disponibles para Suiza (~343 filas/mes observadas)
+BRASIL_CAP = 900   # filas de datos disponibles para Brasil (~522 filas/mes observadas, con margen de crecimiento)
+SUIZA_CAP = 800    # filas de datos disponibles para Suiza (~469 filas/mes observadas, con margen de crecimiento)
 GAMMA_HEADER_ROW = 2  # fila de encabezados en Gamma_Catalogo (row 1 = titulo)
 
 # ---------- cargar catalogo Gamma ----------
