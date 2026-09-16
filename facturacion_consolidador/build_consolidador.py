@@ -30,6 +30,7 @@ mercados.columns = ["Tscode", "Mercado"]
 EXTRA_TSCODE_MERCADO = {
     "TS01790": "774 - CHILE",  # COMERCIAL MX S.A.
     "TS06039": "774 - CHILE",  # Colombia Motos Limitada (COLMOTOS) - código nuevo, misma empresa que 0007510593
+    "TS06035": "788 - OTHER CARIBE",  # SOLUCIONES AUTOMOTRICES, S.A (SOLAUTO) - código nuevo, misma empresa que TS02849
 }
 mercados = pd.concat([
     mercados,
