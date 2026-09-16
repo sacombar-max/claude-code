@@ -31,7 +31,7 @@ ws = wb["Gamma_Catalogo"]
 # por si el catalogo nuevo tiene menos filas que el anterior).
 for r in range(GAMMA_HEADER_ROW + 1, ws.max_row + 1):
     for c in range(1, 6):
-        ws.cell(row=r, column=c, value=None)
+        ws.cell(row=r, column=c).value = None
 
 r = GAMMA_HEADER_ROW + 1
 for _, row in cat.iterrows():

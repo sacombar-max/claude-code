@@ -42,7 +42,7 @@ def main():
     last_row = max(ws.max_row, 1 + SUIZA_CAP)
     for r in range(2, last_row + 1):
         for c in [1, 3, 4, 5, 6, 7, 8, 9, 10]:
-            ws.cell(row=r, column=c, value=None)
+            ws.cell(row=r, column=c).value = None
         ws.cell(row=r, column=2, value=ALIAS_FORMULA.format(r=r))
 
     for i, row in enumerate(all_rows, start=2):
