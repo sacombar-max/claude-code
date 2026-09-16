@@ -11,7 +11,7 @@ from parse_proformas_pdf import collect_pdfs, parse_pdf
 # Suiza_DE_CN_ID del libro, reemplazando lo que hubiera ahí. Después de esto corre
 # recalc.py y, si quieres, build_resumen.py.
 
-SUIZA_CAP = 450  # debe coincidir con BRASIL_CAP/SUIZA_CAP de build_consolidador.py
+SUIZA_CAP = 800  # debe coincidir con BRASIL_CAP/SUIZA_CAP de build_consolidador.py
 ALIAS_FORMULA = (
     '=IF(A{r}="","",IFERROR(INDEX(Mercados!$A$2:$A$29,MATCH(A{r},Mercados!$B$2:$B$29,0)),"Revisar alias"))'
 )
