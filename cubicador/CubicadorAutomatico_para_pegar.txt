@@ -8,10 +8,10 @@
 '   2. EnviarCorteBodega   -> borrador del correo a la bodega ("PRIMER PIRELLI
 '                             OCTUBRE 14") con las remisiones nuevas del corte y
 '                             sus archivos TXT adjuntos.
-'   3. SolicitarVehiculo   -> filtre en CUBICAR HOY las remisiones que van en
-'                             el vehiculo y ejecutelo: arma el borrador
-'                             "Solicitud Vehiculo No X Doc. Transporte ..." y
-'                             ofrece marcarlas en CRUCE. Repetir por vehiculo.
+'   3. SolicitarVehiculo   -> arma una solicitud de vehiculo POR ZONA
+'                             ("Solicitud Vehiculo No X Doc. Transporte ...")
+'                             con las filas visibles de CUBICAR HOY, y ofrece
+'                             marcar las remisiones en CRUCE.
 '   MarcarRemisionesCubicadas -> marca en CRUCE las filas visibles (manual).
 '
 ' Ningun correo se envia solo: todos quedan como borrador para revisar.
@@ -372,75 +372,103 @@ End Sub
 ' 3. SOLICITUD DE VEHICULO A LA TRANSPORTADORA (filas visibles de CUBICAR HOY)
 '==============================================================================
 Public Sub SolicitarVehiculo()
-    Dim ws As Worksheet, filas As Collection, i As Long, ultima As Long
+    Dim ws As Worksheet, i As Long, ultima As Long, zona As String
     Set ws = HojaDetalle(): If ws Is Nothing Then Exit Sub
     LeerVehiculos
 
-    Set filas = New Collection
+    ' Agrupar por zona las filas visibles (con un filtro se pueden excluir remisiones)
+    Dim porZona As Object: Set porZona = CreateObject("Scripting.Dictionary")
     ultima = ws.Cells(ws.Rows.Count, C_REM).End(xlUp).Row
-    Dim unid As Double, kg As Double, m3 As Double, destinos As String, ciudad As String
-    Dim rems As Object: Set rems = CreateObject("Scripting.Dictionary")
     For i = 2 To ultima
         If Not ws.Rows(i).Hidden And Len(Clave(ws.Cells(i, C_REM).Value)) > 0 Then
-            filas.Add i
-            rems(Clave(ws.Cells(i, C_REM).Value)) = True
-            unid = unid + Num(ws.Cells(i, C_CANT).Value)
-            kg = kg + Num(ws.Cells(i, C_PESO).Value)
-            m3 = m3 + Num(ws.Cells(i, C_CUB).Value)
-            ciudad = UCase(Trim(CStr(ws.Cells(i, C_CIUDAD).Value)))
-            If InStr(1, " / " & destinos & " / ", " / " & ciudad & " / ") = 0 Then
-                destinos = destinos & IIf(Len(destinos) > 0, " / ", "") & ciudad
-            End If
+            zona = Trim(CStr(ws.Cells(i, C_ZONA).Value))
+            If Not porZona.Exists(zona) Then porZona.Add zona, New Collection
+            porZona(zona).Add i
         End If
     Next i
-    If filas.Count = 0 Then MsgBox "No hay filas visibles en " & HOJA_DETALLE & ".", vbExclamation: Exit Sub
-
-    If filas.Count = ultima - 1 Then
-        If MsgBox("No hay filtro: se incluirian TODAS las " & rems.Count & " remisiones en un solo vehiculo." & vbCrLf & _
-                  "Filtre primero las remisiones del vehiculo. Continuar de todas formas?", vbYesNo + vbExclamation) = vbNo Then Exit Sub
+    If porZona.Count = 0 Then MsgBox "No hay remisiones en " & HOJA_DETALLE & ".", vbExclamation: Exit Sub
+    If porZona.Exists(SIN_ZONA) Then
+        MsgBox "Hay remisiones con " & SIN_ZONA & ". Agregue su ciudad en llanta_zona y vuelva a ejecutar CubicarExportSAP," & vbCrLf & _
+               "o se pedira un vehiculo aparte para ellas.", vbExclamation
     End If
 
-    ' Elegir vehiculo mostrando la saturacion de cada uno
+    Dim numIni As String, notaDespacho As String
+    numIni = InputBox("Se armara una solicitud por zona (" & porZona.Count & " zonas)." & vbCrLf & vbCrLf & _
+                      "Numero del primer vehiculo del dia:", "Vehiculo No", "1")
+    If Not IsNumeric(numIni) Then Exit Sub
+    notaDespacho = InputBox("Nota inicial de los correos:", "Nota", "Vehículo para despacho mañana.")
+
+    Dim zonas As Variant, z As Variant, numVeh As Long, rems As Object, hechas As String, todas As Object
+    Set todas = CreateObject("Scripting.Dictionary")
+    zonas = Ordenadas(porZona)
+    numVeh = CLng(numIni)
+    For Each z In zonas
+        Set rems = SolicitudZona(ws, porZona(z), CStr(z), numVeh, notaDespacho)
+        If Not rems Is Nothing Then
+            hechas = hechas & vbCrLf & "Vehiculo " & numVeh & ": " & z & " (" & rems.Count & " remisiones)"
+            Dim r As Variant
+            For Each r In rems.Keys: todas(r) = "Vehiculo " & numVeh & " - " & z: Next r
+            numVeh = numVeh + 1
+        End If
+    Next z
+    If todas.Count = 0 Then Exit Sub
+
+    If MsgBox("Borradores creados:" & hechas & vbCrLf & vbCrLf & _
+              "Despues de enviarlos, marcar estas " & todas.Count & " remisiones en CRUCE?", vbYesNo + vbQuestion) = vbYes Then
+        MarcarEnCruceObs todas
+    End If
+End Sub
+
+' Arma el borrador de una zona. Devuelve las remisiones incluidas, o Nothing si se omitio.
+Private Function SolicitudZona(ws As Worksheet, filas As Collection, zona As String, numVeh As Long, notaDespacho As String) As Object
+    Dim i As Long, unid As Double, kg As Double, m3 As Double, destinos As String, ciudad As String
+    Dim rems As Object: Set rems = CreateObject("Scripting.Dictionary")
+    For i = 1 To filas.Count
+        rems(Clave(ws.Cells(filas(i), C_REM).Value)) = True
+        unid = unid + Num(ws.Cells(filas(i), C_CANT).Value)
+        kg = kg + Num(ws.Cells(filas(i), C_PESO).Value)
+        m3 = m3 + Num(ws.Cells(filas(i), C_CUB).Value)
+        ciudad = UCase(Trim(CStr(ws.Cells(filas(i), C_CIUDAD).Value)))
+        If InStr(1, " / " & destinos & " / ", " / " & ciudad & " / ") = 0 Then
+            destinos = destinos & IIf(Len(destinos) > 0, " / ", "") & ciudad
+        End If
+    Next i
+
     Dim lista As String, k As Long, opc As String
     For k = 1 To UBound(vehNombre)
         lista = lista & k & " = " & vehEtiqueta(k) & "  ->  " & Format(m3 / vehCap(k), "0%") & vbCrLf
     Next k
-    opc = InputBox("Remisiones: " & rems.Count & "   Unidades: " & Format(unid, "#,##0") & _
+    opc = InputBox("ZONA: " & zona & "   (vehiculo No " & numVeh & ")" & vbCrLf & _
+                   "Destinos: " & destinos & vbCrLf & _
+                   "Remisiones: " & rems.Count & "   Unidades: " & Format(unid, "#,##0") & _
                    "   Peso: " & Format(kg, "#,##0") & " kg   Cubicaje: " & Format(m3, "0.00") & " m3" & vbCrLf & vbCrLf & _
-                   "Saturacion por vehiculo:" & vbCrLf & lista & vbCrLf & "Numero del tipo de vehiculo:", "Tipo de vehiculo", _
+                   "Saturacion por vehiculo:" & vbCrLf & lista & vbCrLf & _
+                   "Numero del tipo de vehiculo (0 = no pedir vehiculo para esta zona hoy):", "Vehiculo por zona", _
                    CStr(IndiceSugerido(m3)))
-    If Not IsNumeric(opc) Then Exit Sub
-    k = CLng(opc): If k < 1 Or k > UBound(vehNombre) Then Exit Sub
+    If Not IsNumeric(opc) Then Exit Function
+    k = CLng(opc): If k < 1 Or k > UBound(vehNombre) Then Exit Function
 
-    Dim numVeh As String, docTransp As String, notaDespacho As String, cliente As String
-    numVeh = InputBox("Numero del vehiculo del dia:", "Vehiculo No", "1"): If Len(numVeh) = 0 Then Exit Sub
-    docTransp = InputBox("Doc. Transporte:", "Doc. Transporte", Clave(ws.Cells(filas(1), C_REM).Value)): If Len(docTransp) = 0 Then Exit Sub
-    notaDespacho = InputBox("Nota inicial del correo:", "Nota", "Vehículo para despacho mañana.")
-    cliente = InputBox("Texto adicional para la nota (opcional, ej. '1 CLIENTE'):", "Nota", "")
+    Dim docTransp As String, extra As String
+    docTransp = InputBox("Zona " & zona & " - Doc. Transporte:", "Doc. Transporte", Clave(ws.Cells(filas(1), C_REM).Value))
+    If Len(docTransp) = 0 Then Exit Function
+    extra = InputBox("Zona " & zona & " - texto adicional para la nota (opcional, ej. '1 CLIENTE'):", "Nota", "")
 
     Dim cuerpo As String
     cuerpo = "<p>Buen d&iacute;a</p>" & _
-        "<p><b>NOTA: " & Html(notaDespacho) & "</b></p>" & _
+        IIf(Len(notaDespacho) > 0, "<p><b>NOTA: " & Html(notaDespacho) & "</b></p>", "") & _
         "<table style='font-family:Calibri;font-size:11pt'>" & _
         FilaDato("Tipo Veh&iacute;culo", Html(vehEtiqueta(k))) & _
         FilaDato("Destino", Html(destinos)) & _
         FilaDato("Doc. Transporte", Html(docTransp)) & _
         FilaDato("Observaciones:", "Unidades cargadas " & Format(unid, "#,##0")) & _
-        FilaDato("Nota:", "El veh&iacute;culo se encuentra " & Format(m3 / vehCap(k), "0%") & " de su capacidad " & Html(cliente)) & _
+        FilaDato("Nota:", "El veh&iacute;culo se encuentra " & Format(m3 / vehCap(k), "0%") & " de su capacidad " & Html(extra)) & _
         FilaDato("", "Despachar seg&uacute;n TXT al menos que tenga instrucci&oacute;n PESO " & Format(kg, "0")) & _
         "</table><br>" & TablaHtml(ws, filas, True)
 
     CrearCorreo PARA_TRANSPORTE, CC_TRANSPORTE, _
         "Solicitud Vehículo No " & numVeh & " Doc. Transporte " & docTransp & " " & Format(Date, "dd/mm/yyyy"), cuerpo, Nothing
-
-    If MsgBox("Borrador creado." & vbCrLf & "Despues de enviarlo, marcar estas " & rems.Count & _
-              " remisiones en CRUCE como cubicadas?", vbYesNo + vbQuestion) = vbYes Then
-        MarcarEnCruce rems, "Vehiculo " & numVeh & " - Doc " & docTransp
-        On Error Resume Next
-        If ws.FilterMode Then ws.ShowAllData
-        On Error GoTo 0
-    End If
-End Sub
+    Set SolicitudZona = rems
+End Function
 
 '==============================================================================
 ' Marcar manualmente en CRUCE las filas visibles de CUBICAR HOY
@@ -461,6 +489,14 @@ Public Sub MarcarRemisionesCubicadas()
 End Sub
 
 Private Sub MarcarEnCruce(rems As Object, obs As String)
+    Dim d As Object, k As Variant
+    Set d = CreateObject("Scripting.Dictionary")
+    For Each k In rems.Keys: d(k) = obs: Next k
+    MarcarEnCruceObs d
+End Sub
+
+' rems: remision -> observacion
+Private Sub MarcarEnCruceObs(rems As Object)
     Dim wsC As Worksheet, dCruce As Object, fila As Long, k As Variant, n As Long
     Set wsC = ThisWorkbook.Worksheets("CRUCE")
     Set dCruce = Diccionario(wsC, 1, 1, 2)
@@ -468,7 +504,7 @@ Private Sub MarcarEnCruce(rems As Object, obs As String)
     For Each k In rems.Keys
         If Not dCruce.Exists(CStr(k)) Then
             wsC.Cells(fila, 1).Value = CDbl(k)
-            wsC.Cells(fila, 2).Value = obs & " - " & Format(Now, "dd/mm/yyyy hh:nn")
+            wsC.Cells(fila, 2).Value = rems(k) & " - " & Format(Now, "dd/mm/yyyy hh:nn")
             fila = fila + 1: n = n + 1
         End If
     Next k

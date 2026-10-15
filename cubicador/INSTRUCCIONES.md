@@ -15,7 +15,7 @@
 |---|---|---|
 | 1 | `CubicarExportSAP` | Pide el export de SAP y el texto del corte (ej. `1 Corte Octubre 14`). Toma las entregas que no están en `CRUCE` y crea `CUBICAR HOY`, `RESUMEN TRANSPORTE` y `ALERTAS`. La columna **Nuevo en corte** indica qué remisiones aún no se han enviado a bodega. |
 | 2 | `EnviarCorteBodega` | Borrador "PRIMER PIRELLI OCTUBRE 14" con las remisiones nuevas (tabla sin valor) y sus TXT adjuntos. Avisa qué remisiones no tienen TXT. Al final pregunta si se registran como enviadas (hoja `HISTORIAL BODEGA`). |
-| 3 | `SolicitarVehiculo` | Filtrar en `CUBICAR HOY` las remisiones del vehículo y ejecutar. Muestra la saturación de cada tipo de vehículo, pide tipo, número de vehículo, Doc. Transporte y nota, y arma el borrador "Solicitud Vehículo No X Doc. Transporte …" (tabla con valor). Al final pregunta si marca esas remisiones en `CRUCE`. Repetir por cada vehículo. |
+| 3 | `SolicitarVehiculo` | Se ejecuta una vez y arma **una solicitud de vehículo por zona** con las filas visibles de `CUBICAR HOY`. Por cada zona muestra la saturación de cada tipo de vehículo y pide el tipo (0 = no pedir hoy), el Doc. Transporte y la nota; numera los vehículos en orden. Al final pregunta si marca las remisiones en `CRUCE`. |
 
 Ningún correo se envía solo: todos quedan como borrador en Outlook, con la firma del usuario.
 
