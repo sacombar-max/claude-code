@@ -1,26 +1,34 @@
 # Cubicador automático – instrucciones
 
 ## Instalación (una sola vez)
-1. Abrir el cubicador (`.xlsb`; ese formato ya admite macros).
-2. `Alt + F11` → menú **Archivo → Importar archivo…** → seleccionar `CubicadorAutomatico.bas`.
-3. En el módulo, completar `CORREO_TRANSPORTADORA` (y `CORREO_COPIA` si aplica).
-4. Opcional: crear botones en una hoja (Programador → Insertar → Botón) y asignarles las 3 macros.
-5. Guardar el archivo.
+1. Abrir el cubicador `.xlsb` (ese formato admite macros).
+2. `Alt + F11` → si ya existe un módulo anterior del cubicador, borrarlo (clic derecho → Quitar).
+3. **Insertar → Módulo** y pegar todo el contenido de `CubicadorAutomatico_para_pegar.txt`.
+4. Al inicio del código, llenar los destinatarios (correos o nombres como salen en Outlook, separados por `;`):
+   - `PARA_TRANSPORTE`, `CC_TRANSPORTE`: correo de solicitud de vehículo.
+   - `PARA_BODEGA`, `CC_BODEGA`: correo del corte a bodega.
+   - `CARPETA_TXT` (opcional): carpeta donde SAP deja los TXT de remisión. Si se deja vacío, la macro la pregunta la primera vez y la recuerda.
+5. Guardar.
 
 ## Uso diario
 | Paso | Macro | Qué hace |
 |---|---|---|
-| 1 | `CubicarExportSAP` | Pide el export de SAP y el texto de la fecha de corte. Toma solo las entregas que **no** están en `CRUCE`, calcula cubicaje, valor y zona, y crea las hojas `CUBICAR HOY`, `RESUMEN TRANSPORTE` y `ALERTAS`. |
-| 2 | (revisar) | Revisar `ALERTAS` y `RESUMEN TRANSPORTE` (saturación por vehículo y vehículo sugerido, por zona y por ciudad). |
-| 3 | `GenerarCorreoTransporte` | Abre un borrador de Outlook con el resumen. **No lo envía**: se revisa y se envía a mano. |
-| 4 | `MarcarRemisionesCubicadas` | Después de enviar la solicitud, agrega las remisiones a `CRUCE` para que no se vuelvan a cubicar. |
+| 1 | `CubicarExportSAP` | Pide el export de SAP y el texto del corte (ej. `1 Corte Octubre 14`). Toma las entregas que no están en `CRUCE` y crea `CUBICAR HOY`, `RESUMEN TRANSPORTE` y `ALERTAS`. La columna **Nuevo en corte** indica qué remisiones aún no se han enviado a bodega. |
+| 2 | `EnviarCorteBodega` | Borrador "PRIMER PIRELLI OCTUBRE 14" con las remisiones nuevas (tabla sin valor) y sus TXT adjuntos. Avisa qué remisiones no tienen TXT. Al final pregunta si se registran como enviadas (hoja `HISTORIAL BODEGA`). |
+| 3 | `SolicitarVehiculo` | Filtrar en `CUBICAR HOY` las remisiones del vehículo y ejecutar. Muestra la saturación de cada tipo de vehículo, pide tipo, número de vehículo, Doc. Transporte y nota, y arma el borrador "Solicitud Vehículo No X Doc. Transporte …" (tabla con valor). Al final pregunta si marca esas remisiones en `CRUCE`. Repetir por cada vehículo. |
 
-## Reglas que aplica
-- **Remisiones nuevas** = entregas del export con cantidad > 0 que no están en `CRUCE`.
-- **Cubicaje** = m³/und de la hoja `MATERIAL` × cantidad. **Valor** = valor de `VALO MATERIAL` × cantidad.
-- **Zona** = ciudad buscada en `llanta_zona` (ignora tildes, comas y puntos: "BOGOTA D.C." = "BOGOTA, D.C.").
-- **Vehículo sugerido** = el más pequeño cuya saturación sea ≤ `TOPE_SATURACION` (100 % por defecto). Capacidades leídas de `CUBICAJE BODEGA!B3:C6`. Si no cabe en el más grande, indica cuántos se necesitan y marca "revisar".
-- Solo considera volumen (m³), no peso máximo por vehículo.
+Ningún correo se envía solo: todos quedan como borrador en Outlook, con la firma del usuario.
+
+## Reglas
+- **Remisiones pendientes** = entregas del export con cantidad > 0 que no están en `CRUCE`. Las que no van en un vehículo siguen saliendo los días siguientes.
+- **Remisiones nuevas para bodega** = pendientes que no están en `HISTORIAL BODEGA`. La primera vez, el historial se llena con las remisiones que ya están en `CUBICAJE BODEGA`.
+- **Cubicaje** = m³/und de `MATERIAL` × cantidad. **Valor** = `VALO MATERIAL` × cantidad. **Zona** = ciudad en `llanta_zona`.
+- **Saturación** = m³ ÷ m³ máximo de `CUBICAJE BODEGA!C3:C6` (ej. Sencillo 36). El nombre del vehículo en el correo usa la etiqueta de la columna A (ej. "SENCILLO 42").
+- **Peso** del correo = suma de pesos; **Destino** = ciudades distintas en el orden de las filas; **Doc. Transporte** sugerido = primera remisión visible (se puede cambiar).
+- Los TXT se reconocen por el texto `Remisión: 29150…` dentro del archivo; si hay varios para la misma remisión se adjunta el más reciente.
+- Si hay remisiones de PIRELLI y PROMETEON en el mismo corte, se crea un correo de bodega por empresa.
 
 ## Validación hecha
-Con el export del 13-oct-2026 y el cubicador compartido, la lógica (replicada en Python) dio las mismas 38 remisiones / 123 líneas que el cubicador y los mismos totales: 85,9716 m³, 698 unidades, 9.296,04 kg y $226.306.752. La macro VBA en sí no se ha ejecutado todavía en Excel: probarla primero en una copia del archivo.
+- Lógica de cubicaje (replicada en Python) con el export y el cubicador compartidos: mismas 38 remisiones / 123 líneas y mismos totales (85,9716 m³, 698 und, 9.296,04 kg, $226.306.752).
+- Correo de vehículo No 2 del 14-oct: con las mismas líneas da 291 unidades, 4.196 kg y 38,71 m³ → 108 % sobre 36 m³, igual que el correo original.
+- La macro VBA no se ha ejecutado en Excel desde aquí: probar primero en una copia.
