@@ -15,7 +15,7 @@
 |---|---|---|
 | 1 | `CubicarExportSAP` | Pide el export de SAP y el texto del corte (ej. `1 Corte Octubre 14`). Toma las entregas que no están en `CRUCE` y crea `CUBICAR HOY`, `RESUMEN TRANSPORTE` y `ALERTAS`. La columna **Nuevo en corte** indica qué remisiones aún no se han enviado a bodega. |
 | 2 | `EnviarCorteBodega` | Borrador "PRIMER PIRELLI OCTUBRE 14" con las remisiones nuevas (tabla sin valor) y sus TXT adjuntos. Avisa qué remisiones no tienen TXT. Al final pregunta si se registran como enviadas (hoja `HISTORIAL BODEGA`). |
-| 3 | `SolicitarVehiculo` | Se ejecuta una vez y arma **una solicitud de vehículo por zona** con las filas visibles de `CUBICAR HOY`. Por cada zona muestra la saturación de cada tipo de vehículo y pide el tipo (0 = no pedir hoy), el Doc. Transporte y la nota; numera los vehículos en orden. Al final pregunta si marca las remisiones en `CRUCE`. |
+| 3 | `SolicitarVehiculo` | Se ejecuta una vez y arma **una solicitud de vehículo por zona** (si la zona no cabe en un vehículo por m³ o por máximo de descargues, la divide en la menor cantidad de vehículos) con las filas visibles de `CUBICAR HOY`. Por cada zona muestra la saturación de cada tipo de vehículo y pide el tipo (0 = no pedir hoy), el Doc. Transporte y la nota; numera los vehículos en orden. Al final pregunta si marca las remisiones en `CRUCE`. |
 
 Ningún correo se envía solo: todos quedan como borrador en Outlook, con la firma del usuario.
 
@@ -23,6 +23,7 @@ Ningún correo se envía solo: todos quedan como borrador en Outlook, con la fir
 - **Remisiones pendientes** = entregas del export con cantidad > 0 que no están en `CRUCE`. Las que no van en un vehículo siguen saliendo los días siguientes.
 - **Remisiones nuevas para bodega** = pendientes que no están en `HISTORIAL BODEGA`. La primera vez, el historial se llena con las remisiones que ya están en `CUBICAJE BODEGA`.
 - **Cubicaje** = m³/und de `MATERIAL` × cantidad. **Valor** = `VALO MATERIAL` × cantidad. **Zona** = ciudad en `llanta_zona`.
+- **Máximo de descargues** (puntos de entrega = direcciones distintas, columna Dirección): TURBO 13, SENCILLO 10, PATINETA 1, TRACTOMULA 1. Se cambia en la función `MaxDescargues`.
 - **Saturación** = m³ ÷ m³ máximo de `CUBICAJE BODEGA!C3:C6` (ej. Sencillo 36). El nombre del vehículo en el correo usa la etiqueta de la columna A (ej. "SENCILLO 42").
 - **Peso** del correo = suma de pesos; **Destino** = ciudades distintas en el orden de las filas; **Doc. Transporte** sugerido = primera remisión visible (se puede cambiar).
 - Los TXT se reconocen por el texto `Remisión: 29150…` dentro del archivo; si hay varios para la misma remisión se adjunta el más reciente.

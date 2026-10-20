@@ -9,7 +9,9 @@ Attribute VB_Name = "CubicadorAutomatico"
 '   2. EnviarCorteBodega   -> borrador del correo a la bodega ("PRIMER PIRELLI
 '                             OCTUBRE 14") con las remisiones nuevas del corte y
 '                             sus archivos TXT adjuntos.
-'   3. SolicitarVehiculo   -> arma una solicitud de vehiculo POR ZONA
+'   3. SolicitarVehiculo   -> arma solicitudes de vehiculo POR ZONA; si una zona
+'                             supera m3 o el maximo de descargues (TURBO 13,
+'                             SENCILLO 10, PATINETA/TRACTOMULA 1) la divide
 '                             ("Solicitud Vehiculo No X Doc. Transporte ...")
 '                             con las filas visibles de CUBICAR HOY, y ofrece
 '                             marcar las remisiones en CRUCE.
@@ -214,11 +216,12 @@ Private Sub ArmarResumen(out As Variant, n As Long)
     Dim ws As Worksheet: Set ws = HojaNueva(HOJA_RESUMEN)
     Dim enc As Variant, k As Long, nv As Long
     nv = UBound(vehNombre)
-    ReDim enc(1 To 7 + nv + 1)
+    ReDim enc(1 To 7 + nv + 2)
     enc(1) = "Zona": enc(2) = "Ciudad": enc(3) = "Remisiones": enc(4) = "Unidades"
     enc(5) = "Kilos": enc(6) = "Cubicaje m3": enc(7) = "Valor sin IVA"
     For k = 1 To nv: enc(7 + k) = "% " & vehNombre(k) & " (" & vehCap(k) & " m3)": Next k
     enc(8 + nv) = "Vehiculo sugerido"
+    enc(9 + nv) = "Descargues"
 
     Dim fila As Long: fila = 1
     ws.Cells(fila, 1).Value = "POR ZONA": ws.Cells(fila, 1).Font.Bold = True
@@ -237,7 +240,7 @@ Private Sub Acumular(d As Object, clave As String, ciudad As String, out As Vari
     Dim g As Variant
     If Not d.Exists(clave) Then
         ' zona, ciudad, remisiones(dict), unidades, kilos, m3, valor
-        d.Add clave, Array(CStr(out(i, 7)), ciudad, CreateObject("Scripting.Dictionary"), 0#, 0#, 0#, 0#)
+        d.Add clave, Array(CStr(out(i, 7)), ciudad, CreateObject("Scripting.Dictionary"), 0#, 0#, 0#, 0#, CreateObject("Scripting.Dictionary"))
     End If
     g = d(clave)
     g(2).Item(CStr(out(i, 4))) = True
@@ -245,6 +248,7 @@ Private Sub Acumular(d As Object, clave As String, ciudad As String, out As Vari
     g(4) = g(4) + out(i, 11)
     g(5) = g(5) + out(i, 15)
     g(6) = g(6) + out(i, 17)
+    g(7).Item(NormCiudad(CStr(out(i, 6))) & "|" & NormCiudad(CStr(out(i, 13)))) = True
     d(clave) = g
 End Sub
 
@@ -268,7 +272,8 @@ Private Function EscribirGrupos(ws As Worksheet, fila As Long, enc As Variant, d
         For k = 1 To nv
             ws.Cells(fila, 7 + k).Value = g(5) / vehCap(k)
         Next k
-        ws.Cells(fila, 8 + nv).Value = VehiculoSugerido(CDbl(g(5)))
+        ws.Cells(fila, 8 + nv).Value = VehiculoSugerido(CDbl(g(5)), CLng(g(7).Count))
+        ws.Cells(fila, 9 + nv).Value = g(7).Count
     Next key
     ws.Range(ws.Cells(ini + 1, 5), ws.Cells(fila, 5)).NumberFormat = "#,##0.0"
     ws.Range(ws.Cells(ini + 1, 6), ws.Cells(fila, 6)).NumberFormat = "0.00"
@@ -288,30 +293,14 @@ End Function
 
 ' Regla: el vehiculo mas pequeno cuya saturacion sea <= TOPE_SATURACION.
 ' Si no cabe en el mas grande, se indica cuantos del mas grande se necesitan.
-Private Function VehiculoSugerido(m3 As Double) As String
-    Dim k As Long, nv As Long, mayor As Long
-    nv = UBound(vehNombre)
+Private Function VehiculoSugerido(m3 As Double, pts As Long) As String
+    Dim k As Long
     If m3 <= 0 Then VehiculoSugerido = "Sin cubicaje (revisar ALERTAS)": Exit Function
-    mayor = 1
-    For k = 1 To nv
-        If vehCap(k) > vehCap(mayor) Then mayor = k
-    Next k
-    Dim mejor As Long: mejor = 0
-    For k = 1 To nv
-        If m3 / vehCap(k) <= TOPE_SATURACION Then
-            If mejor = 0 Then
-                mejor = k
-            ElseIf vehCap(k) < vehCap(mejor) Then
-                mejor = k
-            End If
-        End If
-    Next k
-    If mejor > 0 Then
-        VehiculoSugerido = vehNombre(mejor) & " (" & Format(m3 / vehCap(mejor), "0%") & ")"
+    If Factible(m3, pts) Then
+        k = IndiceSugerido(m3, pts)
+        VehiculoSugerido = vehNombre(k) & " (" & Format(m3 / vehCap(k), "0%") & ")"
     Else
-        Dim cuantos As Long
-        cuantos = -Int(-m3 / (vehCap(mayor) * TOPE_SATURACION))
-        VehiculoSugerido = cuantos & " x " & vehNombre(mayor) & " - revisar"
+        VehiculoSugerido = "Dividir en varios vehiculos (" & pts & " descargues)"
     End If
 End Function
 
@@ -393,24 +382,40 @@ Public Sub SolicitarVehiculo()
                "o se pedira un vehiculo aparte para ellas.", vbExclamation
     End If
 
+    ' Dividir cada zona en cargas que respeten m3 y maximo de descargues
+    Dim zonas As Variant, z As Variant, cargas As Object, totalCargas As Long, plan As String, c As Variant
+    Set cargas = CreateObject("Scripting.Dictionary")
+    zonas = Ordenadas(porZona)
+    For Each z In zonas
+        cargas.Add z, ArmarCargas(ws, porZona(z))
+        totalCargas = totalCargas + cargas(z).Count
+        plan = plan & vbCrLf & z & ": " & cargas(z).Count & " vehiculo(s)"
+    Next z
+
     Dim numIni As String, notaDespacho As String
-    numIni = InputBox("Se armara una solicitud por zona (" & porZona.Count & " zonas)." & vbCrLf & vbCrLf & _
+    numIni = InputBox("Plan por zona (maximo de descargues: TURBO " & MaxDescargues("TURBO") & ", SENCILLO " & _
+                      MaxDescargues("SENCILLO") & ", PATINETA/TRACTOMULA 1):" & plan & vbCrLf & vbCrLf & _
                       "Numero del primer vehiculo del dia:", "Vehiculo No", "1")
     If Not IsNumeric(numIni) Then Exit Sub
     notaDespacho = InputBox("Nota inicial de los correos:", "Nota", "Vehículo para despacho mañana.")
 
-    Dim zonas As Variant, z As Variant, numVeh As Long, rems As Object, hechas As String, todas As Object
+    Dim numVeh As Long, rems As Object, hechas As String, todas As Object, n As Long, r As Variant, etiqueta As String
+    Dim cc As Collection
     Set todas = CreateObject("Scripting.Dictionary")
-    zonas = Ordenadas(porZona)
     numVeh = CLng(numIni)
     For Each z In zonas
-        Set rems = SolicitudZona(ws, porZona(z), CStr(z), numVeh, notaDespacho)
-        If Not rems Is Nothing Then
-            hechas = hechas & vbCrLf & "Vehiculo " & numVeh & ": " & z & " (" & rems.Count & " remisiones)"
-            Dim r As Variant
-            For Each r In rems.Keys: todas(r) = "Vehiculo " & numVeh & " - " & z: Next r
-            numVeh = numVeh + 1
-        End If
+        n = 0
+        For Each c In cargas(z)
+            n = n + 1
+            etiqueta = z & IIf(cargas(z).Count > 1, " (carga " & n & " de " & cargas(z).Count & ")", "")
+            Set cc = c
+            Set rems = SolicitudZona(ws, cc, etiqueta, numVeh, notaDespacho)
+            If Not rems Is Nothing Then
+                hechas = hechas & vbCrLf & "Vehiculo " & numVeh & ": " & etiqueta & " (" & rems.Count & " remisiones)"
+                For Each r In rems.Keys: todas(r) = "Vehiculo " & numVeh & " - " & z: Next r
+                numVeh = numVeh + 1
+            End If
+        Next c
     Next z
     If todas.Count = 0 Then Exit Sub
 
@@ -420,12 +425,14 @@ Public Sub SolicitarVehiculo()
     End If
 End Sub
 
-' Arma el borrador de una zona. Devuelve las remisiones incluidas, o Nothing si se omitio.
+' Arma el borrador de una carga. Devuelve las remisiones incluidas, o Nothing si se omitio.
 Private Function SolicitudZona(ws As Worksheet, filas As Collection, zona As String, numVeh As Long, notaDespacho As String) As Object
-    Dim i As Long, unid As Double, kg As Double, m3 As Double, destinos As String, ciudad As String
+    Dim i As Long, unid As Double, kg As Double, m3 As Double, destinos As String, ciudad As String, pts As Long
     Dim rems As Object: Set rems = CreateObject("Scripting.Dictionary")
+    Dim puntos As Object: Set puntos = CreateObject("Scripting.Dictionary")
     For i = 1 To filas.Count
         rems(Clave(ws.Cells(filas(i), C_REM).Value)) = True
+        puntos(PuntoEntrega(ws, filas(i))) = True
         unid = unid + Num(ws.Cells(filas(i), C_CANT).Value)
         kg = kg + Num(ws.Cells(filas(i), C_PESO).Value)
         m3 = m3 + Num(ws.Cells(filas(i), C_CUB).Value)
@@ -434,20 +441,27 @@ Private Function SolicitudZona(ws As Worksheet, filas As Collection, zona As Str
             destinos = destinos & IIf(Len(destinos) > 0, " / ", "") & ciudad
         End If
     Next i
+    pts = puntos.Count
 
-    Dim lista As String, k As Long, opc As String
+    Dim lista As String, k As Long, opc As String, aviso As String
     For k = 1 To UBound(vehNombre)
-        lista = lista & k & " = " & vehEtiqueta(k) & "  ->  " & Format(m3 / vehCap(k), "0%") & vbCrLf
+        lista = lista & k & " = " & vehEtiqueta(k) & "  ->  " & Format(m3 / vehCap(k), "0%") & _
+                "  (max " & MaxDescargues(vehNombre(k)) & " descargues)" & _
+                IIf(pts > MaxDescargues(vehNombre(k)), "  NO PERMITIDO", "") & vbCrLf
     Next k
-    opc = InputBox("ZONA: " & zona & "   (vehiculo No " & numVeh & ")" & vbCrLf & _
-                   "Destinos: " & destinos & vbCrLf & _
-                   "Remisiones: " & rems.Count & "   Unidades: " & Format(unid, "#,##0") & _
-                   "   Peso: " & Format(kg, "#,##0") & " kg   Cubicaje: " & Format(m3, "0.00") & " m3" & vbCrLf & vbCrLf & _
-                   "Saturacion por vehiculo:" & vbCrLf & lista & vbCrLf & _
-                   "Numero del tipo de vehiculo (0 = no pedir vehiculo para esta zona hoy):", "Vehiculo por zona", _
-                   CStr(IndiceSugerido(m3)))
-    If Not IsNumeric(opc) Then Exit Function
-    k = CLng(opc): If k < 1 Or k > UBound(vehNombre) Then Exit Function
+    Do
+        opc = InputBox(aviso & "ZONA: " & zona & "   (vehiculo No " & numVeh & ")" & vbCrLf & _
+                       "Destinos: " & destinos & vbCrLf & _
+                       "Remisiones: " & rems.Count & "   Descargues: " & pts & "   Unidades: " & Format(unid, "#,##0") & _
+                       "   Peso: " & Format(kg, "#,##0") & " kg   Cubicaje: " & Format(m3, "0.00") & " m3" & vbCrLf & vbCrLf & _
+                       "Saturacion por vehiculo:" & vbCrLf & lista & vbCrLf & _
+                       "Numero del tipo de vehiculo (0 = no pedir este vehiculo hoy):", "Vehiculo", _
+                       CStr(IndiceSugerido(m3, pts)))
+        If Not IsNumeric(opc) Then Exit Function
+        k = CLng(opc): If k < 1 Or k > UBound(vehNombre) Then Exit Function
+        If pts <= MaxDescargues(vehNombre(k)) Then Exit Do
+        aviso = ">> " & vehNombre(k) & " permite maximo " & MaxDescargues(vehNombre(k)) & " descargues y esta carga tiene " & pts & "." & vbCrLf & vbCrLf
+    Loop
 
     Dim docTransp As String, extra As String
     docTransp = InputBox("Zona " & zona & " - Doc. Transporte:", "Doc. Transporte", Clave(ws.Cells(filas(1), C_REM).Value))
@@ -461,7 +475,7 @@ Private Function SolicitudZona(ws As Worksheet, filas As Collection, zona As Str
         FilaDato("Tipo Veh&iacute;culo", Html(vehEtiqueta(k))) & _
         FilaDato("Destino", Html(destinos)) & _
         FilaDato("Doc. Transporte", Html(docTransp)) & _
-        FilaDato("Observaciones:", "Unidades cargadas " & Format(unid, "#,##0")) & _
+        FilaDato("Observaciones:", "Unidades cargadas " & Format(unid, "#,##0") & " - Puntos de entrega " & pts) & _
         FilaDato("Nota:", "El veh&iacute;culo se encuentra " & Format(m3 / vehCap(k), "0%") & " de su capacidad " & Html(extra)) & _
         FilaDato("", "Despachar seg&uacute;n TXT al menos que tenga instrucci&oacute;n PESO " & Format(kg, "0")) & _
         "</table><br>" & TablaHtml(ws, filas, True)
@@ -469,6 +483,131 @@ Private Function SolicitudZona(ws As Worksheet, filas As Collection, zona As Str
     CrearCorreo PARA_TRANSPORTE, CC_TRANSPORTE, _
         "Solicitud Vehículo No " & numVeh & " Doc. Transporte " & docTransp & " " & Format(Date, "dd/mm/yyyy"), cuerpo, Nothing
     Set SolicitudZona = rems
+End Function
+
+' Maximo de puntos de entrega (descargues) por tipo de vehiculo
+Private Function MaxDescargues(nombre As String) As Long
+    Select Case UCase(Trim(nombre))
+        Case "TURBO": MaxDescargues = 13
+        Case "SENCILLO": MaxDescargues = 10
+        Case "PATINETA", "TRACTOMULA", "MINIMULA": MaxDescargues = 1
+        Case Else: MaxDescargues = 999
+    End Select
+End Function
+
+' Punto de entrega = direccion (columna Direccion) normalizada; sin direccion, el cliente
+Private Function PuntoEntrega(ws As Worksheet, fila As Variant) As String
+    Dim s As String
+    s = NormCiudad(CStr(ws.Cells(fila, C_DIR).Value))
+    If Len(s) = 0 Then s = "CLIENTE " & NormCiudad(CStr(ws.Cells(fila, C_CLIENTE).Value))
+    PuntoEntrega = NormCiudad(CStr(ws.Cells(fila, C_CIUDAD).Value)) & "|" & s
+End Function
+
+' Hay algun vehiculo donde quepan estos m3 y estos descargues?
+Private Function Factible(m3 As Double, pts As Long) As Boolean
+    Dim k As Long
+    For k = 1 To UBound(vehNombre)
+        If m3 <= vehCap(k) * TOPE_SATURACION And pts <= MaxDescargues(vehNombre(k)) Then Factible = True: Exit Function
+    Next k
+End Function
+
+' Divide las filas de una zona en la menor cantidad de cargas posible. Un punto de
+' entrega nunca se parte. Cada carga debe caber en algun vehiculo por m3 y por
+' maximo de descargues. Para cada cantidad de vehiculos se intenta primero
+' mantener juntas las ciudades y, si no alcanza, repartir equilibrando la ocupacion.
+Private Function ArmarCargas(ws As Worksheet, filas As Collection) As Collection
+    Dim pts As Object, i As Long, key As String
+    Set pts = CreateObject("Scripting.Dictionary")
+    For i = 1 To filas.Count
+        key = PuntoEntrega(ws, filas(i))
+        If Not pts.Exists(key) Then pts.Add key, New Collection
+        pts(key).Add filas(i)
+    Next i
+
+    ' Puntos ordenados de mayor a menor m3
+    Dim np As Long, claves As Variant, pCiudad() As String, pM3() As Double, ord() As Long, a As Long, b As Long, t As Long
+    np = pts.Count: claves = pts.Keys
+    ReDim pCiudad(1 To np): ReDim pM3(1 To np): ReDim ord(1 To np)
+    Dim f As Variant
+    For a = 1 To np
+        pCiudad(a) = Split(claves(a - 1), "|")(0)
+        For Each f In pts(claves(a - 1)): pM3(a) = pM3(a) + Num(ws.Cells(f, C_CUB).Value): Next f
+        ord(a) = a
+    Next a
+    For a = 1 To np - 1
+        For b = a + 1 To np
+            If pM3(ord(b)) > pM3(ord(a)) Then t = ord(a): ord(a) = ord(b): ord(b) = t
+        Next b
+    Next a
+
+    Dim k As Long, modo As Long, asign() As Long, ok As Boolean
+    ReDim asign(1 To np)
+    For k = 1 To np
+        For modo = 1 To 2
+            ok = Repartir(k, modo, np, ord, pCiudad, pM3, asign)
+            If ok Then Exit For
+        Next modo
+        If ok Then Exit For
+    Next k
+    If Not ok Then   ' algun punto no cabe en ningun vehiculo: uno por carga
+        k = np
+        For a = 1 To np: asign(a) = a: Next a
+    End If
+
+    Dim res As New Collection, carga As Collection, j As Long
+    For j = 1 To k
+        Set carga = New Collection
+        For a = 1 To np
+            If asign(a) = j Then
+                For Each f In pts(claves(a - 1)): carga.Add f: Next f
+            End If
+        Next a
+        If carga.Count > 0 Then res.Add carga
+    Next j
+    Set ArmarCargas = res
+End Function
+
+' Intenta repartir los puntos en k cargas. modo 1 = prefiere la carga que ya
+' tiene la misma ciudad; modo 2 = solo equilibra la ocupacion.
+Private Function Repartir(k As Long, modo As Long, np As Long, ord() As Long, pCiudad() As String, _
+                          pM3() As Double, asign() As Long) As Boolean
+    Dim lM3() As Double, lPts() As Long, lCiud() As String, a As Long, p As Long, j As Long
+    Dim mejor As Long, mejorUso As Double, u As Double, mismaCiudad As Boolean, mejorMisma As Boolean
+    ReDim lM3(1 To k): ReDim lPts(1 To k): ReDim lCiud(1 To k)
+    For a = 1 To np
+        p = ord(a)
+        mejor = 0
+        For j = 1 To k
+            u = Uso(lM3(j) + pM3(p), lPts(j) + 1)
+            If u < 1E+30 Then
+                mismaCiudad = (modo = 1 And InStr(lCiud(j), "|" & pCiudad(p) & "|") > 0)
+                If mejor = 0 Then
+                    mejor = j: mejorUso = u: mejorMisma = mismaCiudad
+                ElseIf (mismaCiudad And Not mejorMisma) Or (mismaCiudad = mejorMisma And u < mejorUso) Then
+                    mejor = j: mejorUso = u: mejorMisma = mismaCiudad
+                End If
+            End If
+        Next j
+        If mejor = 0 Then Exit Function
+        lM3(mejor) = lM3(mejor) + pM3(p)
+        lPts(mejor) = lPts(mejor) + 1
+        If InStr(lCiud(mejor), "|" & pCiudad(p) & "|") = 0 Then lCiud(mejor) = lCiud(mejor) & "|" & pCiudad(p) & "|"
+        asign(p) = mejor
+    Next a
+    Repartir = True
+End Function
+
+' Ocupacion del vehiculo que mejor recibe la carga (mayor entre % m3 y % descargues);
+' 1E+31 si no cabe en ninguno.
+Private Function Uso(m3 As Double, pts As Long) As Double
+    Dim k As Long, u As Double
+    Uso = 1E+31
+    For k = 1 To UBound(vehNombre)
+        If m3 <= vehCap(k) * TOPE_SATURACION And pts <= MaxDescargues(vehNombre(k)) Then
+            u = Application.Max(m3 / vehCap(k), pts / MaxDescargues(vehNombre(k)))
+            If u < Uso Then Uso = u
+        End If
+    Next k
 End Function
 
 '==============================================================================
@@ -720,10 +859,10 @@ Private Function HojaDetalle() As Worksheet
     If HojaDetalle Is Nothing Then MsgBox "Primero ejecute CubicarExportSAP.", vbExclamation
 End Function
 
-Private Function IndiceSugerido(m3 As Double) As Long
+Private Function IndiceSugerido(m3 As Double, Optional pts As Long = 1) As Long
     Dim k As Long, mejor As Long
     For k = 1 To UBound(vehNombre)
-        If m3 / vehCap(k) <= TOPE_SATURACION Then
+        If m3 / vehCap(k) <= TOPE_SATURACION And pts <= MaxDescargues(vehNombre(k)) Then
             If mejor = 0 Then
                 mejor = k
             ElseIf vehCap(k) < vehCap(mejor) Then
@@ -733,13 +872,16 @@ Private Function IndiceSugerido(m3 As Double) As Long
     Next k
     If mejor = 0 Then
         For k = 1 To UBound(vehNombre)
-            If mejor = 0 Then
-                mejor = k
-            ElseIf vehCap(k) > vehCap(mejor) Then
-                mejor = k
+            If pts <= MaxDescargues(vehNombre(k)) Then
+                If mejor = 0 Then
+                    mejor = k
+                ElseIf vehCap(k) > vehCap(mejor) Then
+                    mejor = k
+                End If
             End If
         Next k
     End If
+    If mejor = 0 Then mejor = 1
     IndiceSugerido = mejor
 End Function
 
