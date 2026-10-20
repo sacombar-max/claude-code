@@ -7,18 +7,18 @@
 '                             Pregunta dos filtros: desde que fecha tomar las
 '                             pendientes para vehiculo, y que remisiones van a
 '                             bodega (por fecha o despues de la ultima registrada).
-'                             Crea CUBICAR HOY, RESUMEN TRANSPORTE y ALERTAS.
-'   2. EnviarCorteBodega   -> borrador del correo a la bodega ("PRIMER PIRELLI
-'                             OCTUBRE 14") con las remisiones nuevas del corte y
-'                             sus archivos TXT adjuntos.
-'   3. SolicitarVehiculo   -> arma solicitudes de vehiculo POR ZONA; si una zona
-'                             supera m3 o el maximo de descargues (TURBO 13,
-'                             SENCILLO 10, PATINETA/TRACTOMULA 1) la divide.
-'                             Si hay carga para Cucuta, Cucuta + Bucaramanga
-'                             van solas (sin Bogota ni otras ciudades).
-'                             ("Solicitud Vehiculo No X Doc. Transporte ...")
-'                             con las filas visibles de CUBICAR HOY, y ofrece
-'                             marcar las remisiones en CRUCE.
+'                             Crea CUBICAR HOY, RESUMEN TRANSPORTE, ALERTAS y la
+'                             vista previa de los correos (ArmarVistaPrevia).
+'   2. Revisar/editar      -> PREVIA BODEGA y PREVIA VEHICULOS muestran todo lo que
+'                             ira en los correos. En vehiculos se edita: Pedir
+'                             (SI/NO), Tipo, Doc. Transporte, Nota; se pueden
+'                             borrar lineas. Los vehiculos salen por zona, divididos
+'                             si no caben (m3 y maximo de descargues: TURBO 13,
+'                             SENCILLO 10, PATINETA/TRACTOMULA 1); si hay carga
+'                             para Cucuta, Cucuta + Bucaramanga van solas.
+'   3. EnviarCorteBodega   -> borradores a bodega desde PREVIA BODEGA, con TXT.
+'   4. SolicitarVehiculo   -> borradores de solicitud desde PREVIA VEHICULOS.
+'   ArmarVistaPrevia       -> rehace las vistas (ej. despues de filtrar CUBICAR HOY).
 '   MarcarRemisionesCubicadas -> marca en CRUCE las filas visibles (manual).
 '
 ' Ningun correo se envia solo: todos quedan como borrador para revisar.
@@ -50,6 +50,8 @@ Private Const HOJA_DETALLE As String = "CUBICAR HOY"
 Private Const HOJA_RESUMEN As String = "RESUMEN TRANSPORTE"
 Private Const HOJA_ALERTAS As String = "ALERTAS"
 Private Const HOJA_HIST As String = "HISTORIAL BODEGA"
+Private Const HOJA_PREV_BOD As String = "PREVIA BODEGA"
+Private Const HOJA_PREV_VEH As String = "PREVIA VEHICULOS"
 Private Const SIN_ZONA As String = "SIN ZONA"
 
 ' Columnas de CUBICAR HOY
@@ -247,13 +249,14 @@ Public Sub CubicarExportSAP()
 
     Application.Calculation = xlCalculationAutomatic
     Application.ScreenUpdating = True
-    ThisWorkbook.Worksheets(HOJA_RESUMEN).Activate
+    ArmarVistaPrevia
 
     MsgBox "Remisiones pendientes para vehiculo: " & nuevas.Count & " (" & n & " lineas)" & vbCrLf & _
            "Ya cubicadas antes (en CRUCE): " & yaCruce & vbCrLf & _
            "Fuera del filtro de fecha para vehiculo: " & fueraVeh.Count & vbCrLf & _
            "Nuevas para el correo a bodega: " & paraBodega.Count & " (" & txtFiltro & ")" & vbCrLf & _
-           "Alertas: " & alertas.Count & IIf(alertas.Count > 0, "  -> revise la hoja " & HOJA_ALERTAS, ""), _
+           "Alertas: " & alertas.Count & IIf(alertas.Count > 0, "  -> revise la hoja " & HOJA_ALERTAS, "") & vbCrLf & vbCrLf & _
+           "Revise " & HOJA_PREV_BOD & " y " & HOJA_PREV_VEH & " antes de armar los correos.", _
            IIf(alertas.Count > 0, vbExclamation, vbInformation), "Cubicaje listo"
     Exit Sub
 
@@ -369,15 +372,26 @@ Private Function VehiculoSugerido(m3 As Double, pts As Long) As String
 End Function
 
 '==============================================================================
-' 2. CORREO A LA BODEGA: remisiones nuevas del corte + TXT adjuntos
+' 2. VISTA PREVIA: arma en Excel lo que ira en los correos (se revisa y edita)
+'    - PREVIA BODEGA:    remisiones nuevas del corte, agrupadas por cliente, con TXT
+'    - PREVIA VEHICULOS: un bloque por vehiculo (por zona, dividido si no cabe)
+'    Se ejecuta sola al final de CubicarExportSAP. Si filtra CUBICAR HOY,
+'    vuelva a ejecutar ArmarVistaPrevia para rehacer el plan de vehiculos.
 '==============================================================================
-Public Sub EnviarCorteBodega()
-    Dim ws As Worksheet, filas As Collection, i As Long, ultima As Long
+Public Sub ArmarVistaPrevia()
+    Dim ws As Worksheet
     Set ws = HojaDetalle(): If ws Is Nothing Then Exit Sub
+    Application.ScreenUpdating = False
+    LeerVehiculos
+    PreviaBodega ws
+    PreviaVehiculos ws
+    Application.ScreenUpdating = True
+    ThisWorkbook.Worksheets(HOJA_PREV_VEH).Activate
+End Sub
 
-    ' Remisiones nuevas (no enviadas antes a bodega), agrupadas por empresa
+Private Sub PreviaBodega(ws As Worksheet)
+    Dim pb As Worksheet, i As Long, ultima As Long, emp As String, corte As String
     Dim porEmpresa As Object: Set porEmpresa = CreateObject("Scripting.Dictionary")
-    Dim corte As String, emp As String
     ultima = ws.Cells(ws.Rows.Count, C_REM).End(xlUp).Row
     For i = 2 To ultima
         If ws.Cells(i, C_NUEVO).Value = "SI" Then
@@ -387,50 +401,53 @@ Public Sub EnviarCorteBodega()
             corte = CStr(ws.Cells(i, C_CORTE).Value)
         End If
     Next i
-    If porEmpresa.Count = 0 Then MsgBox "No hay remisiones nuevas para enviar a bodega.", vbInformation: Exit Sub
 
-    ' Archivos TXT de remision
-    Dim carpeta As String, txt As Object, sinTxt As String
+    Set pb = HojaNueva(HOJA_PREV_BOD)
+    pb.Range("A1").Value = "VISTA PREVIA - CORREO A BODEGA (revise y edite; luego ejecute EnviarCorteBodega)"
+    pb.Range("A1").Font.Bold = True: pb.Range("A1").Font.Size = 13
+    pb.Range("A2").Value = "Para": pb.Range("B2").Value = PARA_BODEGA
+    pb.Range("A3").Value = "CC": pb.Range("B3").Value = CC_BODEGA
+    pb.Range("A2:A3").Font.Bold = True
+    If porEmpresa.Count = 0 Then
+        pb.Range("A5").Value = "No hay remisiones nuevas para enviar a bodega."
+        Exit Sub
+    End If
+
+    Dim txt As Object, carpeta As String
     carpeta = CarpetaTxt()
     If Len(carpeta) > 0 Then Set txt = ArchivosTxtPorRemision(carpeta) Else Set txt = CreateObject("Scripting.Dictionary")
 
-    Dim k As Variant, adj As Collection, vistas As Object, r As String, total As Long
+    Dim fila As Long, k As Variant, ini As Long, r As Long, grupo As Collection
+    fila = 5
     For Each k In porEmpresa.Keys
-        Set filas = porEmpresa(k)
-        Set adj = New Collection
-        Set vistas = CreateObject("Scripting.Dictionary")
-        For i = 1 To filas.Count
-            r = Clave(ws.Cells(filas(i), C_REM).Value)
-            If Not vistas.Exists(r) Then
-                vistas.Add r, True
-                If txt.Exists(r) Then adj.Add txt(r) Else sinTxt = sinTxt & vbCrLf & r
+        pb.Cells(fila, 1).Value = "EMPRESA": pb.Cells(fila, 2).Value = k
+        pb.Range(pb.Cells(fila, 1), pb.Cells(fila, 13)).Interior.Color = RGB(255, 230, 153)
+        pb.Range(pb.Cells(fila, 1), pb.Cells(fila, 13)).Font.Bold = True
+        pb.Cells(fila + 1, 1).Value = "Asunto": pb.Cells(fila + 1, 2).Value = AsuntoCorte(corte, CStr(k))
+        pb.Cells(fila + 2, 1).Value = "Texto": pb.Cells(fila + 2, 2).Value = "Adjunto se encuentra el " & TextoCorte(corte) & ":"
+        pb.Cells(fila + 3, 1).Value = "Corte": pb.Cells(fila + 3, 2).Value = corte
+        pb.Range(pb.Cells(fila + 1, 1), pb.Cells(fila + 3, 1)).Font.Bold = True
+        ini = fila + 4
+        Set grupo = porEmpresa(k)
+        fila = EscribirLineas(pb, ini, ws, grupo, False)
+        pb.Cells(ini, 13).Value = "TXT"
+        For r = ini + 1 To fila - 1
+            If txt.Exists(Clave(pb.Cells(r, 3).Value)) Then
+                pb.Cells(r, 13).Value = "OK"
+            Else
+                pb.Cells(r, 13).Value = "FALTA"
+                pb.Cells(r, 13).Interior.Color = RGB(255, 199, 206)
             End If
-        Next i
-        total = total + vistas.Count
-
-        CrearCorreo PARA_BODEGA, CC_BODEGA, AsuntoCorte(corte, CStr(k)), _
-            "<p>Buen d&iacute;a</p><p>Adjunto se encuentra el " & TextoCorte(corte) & ":</p>" & _
-            TablaHtml(ws, filas, False), adj
+        Next r
+        pb.Range(pb.Cells(ini, 1), pb.Cells(fila - 1, 13)).Borders.LineStyle = xlContinuous
+        fila = fila + 1
     Next k
-
-    If Len(sinTxt) > 0 Then MsgBox "Remisiones sin archivo TXT en la carpeta (adjuntar a mano):" & sinTxt, vbExclamation
-
-    If MsgBox("Se crearon los borradores para bodega (" & total & " remisiones)." & vbCrLf & _
-              "Despues de enviarlos, registrarlas como enviadas a bodega?" & vbCrLf & _
-              "(Si responde No, volveran a salir en el proximo corte.)", vbYesNo + vbQuestion) = vbYes Then
-        RegistrarEnviadasBodega ws, porEmpresa
-    End If
+    pb.Columns("A:M").AutoFit
+    pb.Columns("B").ColumnWidth = Application.Max(pb.Columns("B").ColumnWidth, 14)
 End Sub
 
-'==============================================================================
-' 3. SOLICITUD DE VEHICULO A LA TRANSPORTADORA (filas visibles de CUBICAR HOY)
-'==============================================================================
-Public Sub SolicitarVehiculo()
-    Dim ws As Worksheet, i As Long, ultima As Long, zona As String
-    Set ws = HojaDetalle(): If ws Is Nothing Then Exit Sub
-    LeerVehiculos
-
-    ' Agrupar por zona las filas visibles (con un filtro se pueden excluir remisiones)
+Private Sub PreviaVehiculos(ws As Worksheet)
+    Dim pv As Worksheet, i As Long, ultima As Long, zona As String, k As Long
     Dim porZona As Object: Set porZona = CreateObject("Scripting.Dictionary")
     ultima = ws.Cells(ws.Rows.Count, C_REM).End(xlUp).Row
     For i = 2 To ultima
@@ -440,116 +457,306 @@ Public Sub SolicitarVehiculo()
             porZona(zona).Add i
         End If
     Next i
-    If porZona.Count = 0 Then MsgBox "No hay remisiones en " & HOJA_DETALLE & ".", vbExclamation: Exit Sub
-    If porZona.Exists(SIN_ZONA) Then
-        MsgBox "Hay remisiones con " & SIN_ZONA & ". Agregue su ciudad en llanta_zona y vuelva a ejecutar CubicarExportSAP," & vbCrLf & _
-               "o se pedira un vehiculo aparte para ellas.", vbExclamation
-    End If
 
-    ' Dividir cada zona en cargas que respeten m3 y maximo de descargues
-    Dim zonas As Variant, z As Variant, cargas As Object, totalCargas As Long, plan As String, c As Variant
-    Set cargas = CreateObject("Scripting.Dictionary")
+    Set pv = HojaNueva(HOJA_PREV_VEH)
+    pv.Range("A1").Value = "VISTA PREVIA - SOLICITUD DE VEHICULOS (revise y edite las celdas amarillas; luego ejecute SolicitarVehiculo)"
+    pv.Range("A1").Font.Bold = True: pv.Range("A1").Font.Size = 13
+    pv.Range("A2").Value = "Para": pv.Range("B2").Value = PARA_TRANSPORTE
+    pv.Range("A3").Value = "CC": pv.Range("B3").Value = CC_TRANSPORTE
+    pv.Range("A4").Value = "Nota inicial": pv.Range("B4").Value = "Vehículo para despacho mañana."
+    pv.Range("A2:A4").Font.Bold = True
+    pv.Range("B4").Interior.Color = RGB(255, 255, 153)
+
+    ' Tabla auxiliar de vehiculos (T:V) y opciones SI/NO (W)
+    Dim nv As Long: nv = UBound(vehNombre)
+    pv.Range("T1:V1").Value = Array("Vehiculo", "m3 max", "Max descargues")
+    For k = 1 To nv
+        pv.Cells(1 + k, 20).Value = vehEtiqueta(k)
+        pv.Cells(1 + k, 21).Value = vehCap(k)
+        pv.Cells(1 + k, 22).Value = MaxDescargues(vehNombre(k))
+    Next k
+    pv.Range("W1").Value = "Pedir": pv.Range("W2").Value = "SI": pv.Range("W3").Value = "NO"
+    pv.Range("T1:W1").Font.Bold = True
+    Dim rVeh As String: rVeh = "$T$2:$T$" & (1 + nv)
+    Dim rCap As String: rCap = "$U$2:$U$" & (1 + nv)
+    Dim rMax As String: rMax = "$V$2:$V$" & (1 + nv)
+
+    If porZona.Count = 0 Then pv.Range("A6").Value = "No hay remisiones pendientes para vehiculo.": Exit Sub
+
+    Dim zonas As Variant, z As Variant, c As Variant, cc As Collection, fila As Long, numVeh As Long
+    Dim h As Long, ini As Long, fin As Long, m3 As Double, pts As Long, destinos As String, grupo As Collection
     zonas = Ordenadas(porZona)
+    fila = 6: numVeh = 1
     For Each z In zonas
-        cargas.Add z, CargasZona(ws, porZona(z))
-        totalCargas = totalCargas + cargas(z).Count
-        plan = plan & vbCrLf & z & ": " & cargas(z).Count & " vehiculo(s)"
-    Next z
-
-    Dim numIni As String, notaDespacho As String
-    numIni = InputBox("Plan por zona (maximo de descargues: TURBO " & MaxDescargues("TURBO") & ", SENCILLO " & _
-                      MaxDescargues("SENCILLO") & ", PATINETA/TRACTOMULA 1):" & plan & vbCrLf & vbCrLf & _
-                      "Numero del primer vehiculo del dia:", "Vehiculo No", "1")
-    If Not IsNumeric(numIni) Then Exit Sub
-    notaDespacho = InputBox("Nota inicial de los correos:", "Nota", "Vehículo para despacho mañana.")
-
-    Dim numVeh As Long, rems As Object, hechas As String, todas As Object, n As Long, r As Variant, etiqueta As String
-    Dim cc As Collection
-    Set todas = CreateObject("Scripting.Dictionary")
-    numVeh = CLng(numIni)
-    For Each z In zonas
-        n = 0
-        For Each c In cargas(z)
-            n = n + 1
-            etiqueta = z & IIf(cargas(z).Count > 1, " (carga " & n & " de " & cargas(z).Count & ")", "")
+        Set grupo = porZona(z)
+        For Each c In CargasZona(ws, grupo)
             Set cc = c
-            Set rems = SolicitudZona(ws, cc, etiqueta, numVeh, notaDespacho)
-            If Not rems Is Nothing Then
-                hechas = hechas & vbCrLf & "Vehiculo " & numVeh & ": " & etiqueta & " (" & rems.Count & " remisiones)"
-                For Each r In rems.Keys: todas(r) = "Vehiculo " & numVeh & " - " & z: Next r
-                numVeh = numVeh + 1
-            End If
+            ResumenFilas ws, cc, m3, pts, destinos
+            h = fila
+            ' Fila 1 del bloque: datos editables
+            pv.Cells(h, 1).Value = "VEHICULO No": pv.Cells(h, 2).Value = numVeh
+            pv.Cells(h, 3).Value = "Zona": pv.Cells(h, 4).Value = z
+            pv.Cells(h, 5).Value = "Pedir": pv.Cells(h, 6).Value = "SI"
+            pv.Cells(h, 7).Value = "Tipo": pv.Cells(h, 8).Value = vehEtiqueta(IndiceSugerido(m3, pts))
+            pv.Cells(h, 9).Value = "Doc. Transporte"
+            pv.Cells(h, 11).Value = "Nota adicional"
+            With pv.Range(pv.Cells(h, 1), pv.Cells(h, 18))
+                .Interior.Color = RGB(198, 224, 180): .Font.Bold = True
+            End With
+            pv.Range(pv.Cells(h, 2), pv.Cells(h, 2)).Interior.Color = RGB(255, 255, 153)
+            pv.Cells(h, 6).Interior.Color = RGB(255, 255, 153)
+            pv.Cells(h, 8).Interior.Color = RGB(255, 255, 153)
+            pv.Cells(h, 10).Interior.Color = RGB(255, 255, 153)
+            pv.Cells(h, 12).Interior.Color = RGB(255, 255, 153)
+            With pv.Cells(h, 6).Validation
+                .Delete: .Add Type:=xlValidateList, Formula1:="=$W$2:$W$3"
+            End With
+            With pv.Cells(h, 8).Validation
+                .Delete: .Add Type:=xlValidateList, Formula1:="=" & rVeh
+            End With
+
+            ' Lineas del vehiculo (agrupadas por cliente)
+            ini = h + 2
+            fin = EscribirLineas(pv, ini, ws, cc, True) - 1
+            pv.Cells(h, 10).Value = "'" & Clave(pv.Cells(ini + 1, 3).Value)
+
+            ' Fila 2 del bloque: totales (formulas, se recalculan si edita las lineas)
+            pv.Cells(h + 1, 1).Value = "Destinos": pv.Cells(h + 1, 2).Value = destinos
+            pv.Cells(h + 1, 5).Value = "Descargues": pv.Cells(h + 1, 6).Value = pts
+            pv.Cells(h + 1, 7).Value = "Max descargues"
+            pv.Cells(h + 1, 8).Formula = "=IFERROR(INDEX(" & rMax & ",MATCH(H" & h & "," & rVeh & ",0)),"""")"
+            pv.Cells(h + 1, 9).Value = "Unidades"
+            pv.Cells(h + 1, 10).Formula = "=SUM(H" & ini + 1 & ":H" & fin & ")"
+            pv.Cells(h + 1, 11).Value = "Peso kg"
+            pv.Cells(h + 1, 12).Formula = "=SUM(I" & ini + 1 & ":I" & fin & ")"
+            pv.Cells(h + 1, 13).Value = "m3"
+            pv.Cells(h + 1, 14).Formula = "=SUM(N" & ini + 1 & ":N" & fin & ")"
+            pv.Cells(h + 1, 15).Value = "% capacidad"
+            pv.Cells(h + 1, 16).Formula = "=IFERROR(N" & h + 1 & "/INDEX(" & rCap & ",MATCH(H" & h & "," & rVeh & ",0)),"""")"
+            pv.Cells(h + 1, 10).NumberFormat = "#,##0"
+            pv.Cells(h + 1, 12).NumberFormat = "#,##0"
+            pv.Cells(h + 1, 14).NumberFormat = "0.00"
+            pv.Cells(h + 1, 16).NumberFormat = "0%"
+            pv.Range(pv.Cells(h + 1, 1), pv.Cells(h + 1, 16)).Font.Bold = True
+            ' Alertas: descargues o capacidad excedidos para el tipo elegido
+            pv.Cells(h + 1, 17).Formula = "=IF(AND(ISNUMBER(H" & h + 1 & "),F" & h + 1 & ">H" & h + 1 & "),""EXCEDE DESCARGUES"","""")"
+            pv.Cells(h + 1, 18).Formula = "=IF(AND(ISNUMBER(P" & h + 1 & "),P" & h + 1 & ">" & Replace(CStr(TOPE_SATURACION), ",", ".") & "),""SOBRE CAPACIDAD"","""")"
+            pv.Range(pv.Cells(h + 1, 17), pv.Cells(h + 1, 18)).Font.Color = RGB(192, 0, 0)
+
+            pv.Range(pv.Cells(ini, 1), pv.Cells(fin, 14)).Borders.LineStyle = xlContinuous
+            fila = fin + 2
+            numVeh = numVeh + 1
         Next c
     Next z
-    If todas.Count = 0 Then Exit Sub
+    pv.Columns("A:R").AutoFit
+    pv.Columns("T:W").AutoFit
+End Sub
 
+' Escribe encabezado + lineas (agrupadas por Codigo SAP) a partir de la fila ini.
+' Columnas A:M como en el correo (M = valor si conValor); N = m3 (solo en la vista).
+' Devuelve la primera fila libre despues de las lineas.
+Private Function EscribirLineas(dst As Worksheet, ini As Long, ws As Worksheet, filas As Collection, conValor As Boolean) As Long
+    Dim titulos As Variant, orden As Collection, i As Long, r As Long, f As Long
+    titulos = Array("Fecha Remisión", "CENTRO", "Remisión", "Cliente", "Ciudad", "Código", "Descripción", _
+                    "Cantidad", "Peso", "Codigo SAP", "Dirección", "EMPRESA")
+    dst.Cells(ini, 1).Resize(1, 12).Value = titulos
+    If conValor Then dst.Cells(ini, 13).Value = "VALOR TOTAL SIN IVA": dst.Cells(ini, 14).Value = "m3"
+    With dst.Range(dst.Cells(ini, 1), dst.Cells(ini, IIf(conValor, 14, 13)))
+        .Font.Bold = True: .Interior.Color = RGB(255, 255, 0)
+    End With
+    Set orden = OrdenAgrupado(ws, filas)
+    r = ini
+    For i = 1 To orden.Count
+        r = r + 1: f = orden(i)
+        dst.Cells(r, 1).Value = ws.Cells(f, C_FECHA).Value
+        dst.Cells(r, 2).Value = ws.Cells(f, C_CENTRO).Value
+        dst.Cells(r, 3).Value = ws.Cells(f, C_REM).Value
+        dst.Cells(r, 4).Value = ws.Cells(f, C_CLIENTE).Value
+        dst.Cells(r, 5).Value = ws.Cells(f, C_CIUDAD).Value
+        dst.Cells(r, 6).Value = ws.Cells(f, C_COD).Value
+        dst.Cells(r, 7).Value = ws.Cells(f, C_DESC).Value
+        dst.Cells(r, 8).Value = ws.Cells(f, C_CANT).Value
+        dst.Cells(r, 9).Value = ws.Cells(f, C_PESO).Value
+        dst.Cells(r, 10).Value = ws.Cells(f, C_CODSAP).Value
+        dst.Cells(r, 11).Value = ws.Cells(f, C_DIR).Value
+        dst.Cells(r, 12).Value = ws.Cells(f, C_EMP).Value
+        If conValor Then
+            dst.Cells(r, 13).Value = ws.Cells(f, C_VALOR).Value
+            dst.Cells(r, 14).Value = ws.Cells(f, C_CUB).Value
+        End If
+    Next i
+    If r > ini Then
+        dst.Range(dst.Cells(ini + 1, 1), dst.Cells(r, 1)).NumberFormat = "d/mm/yyyy"
+        dst.Range(dst.Cells(ini + 1, 3), dst.Cells(r, 3)).NumberFormat = "0"
+        dst.Range(dst.Cells(ini + 1, 6), dst.Cells(r, 6)).NumberFormat = "0"
+        dst.Range(dst.Cells(ini + 1, 8), dst.Cells(r, 8)).NumberFormat = "#,##0"
+        dst.Range(dst.Cells(ini + 1, 9), dst.Cells(r, 9)).NumberFormat = "#,##0.000"
+        dst.Range(dst.Cells(ini + 1, 10), dst.Cells(r, 10)).NumberFormat = "0"
+        If conValor Then
+            dst.Range(dst.Cells(ini + 1, 13), dst.Cells(r, 13)).NumberFormat = "$ #,##0.00"
+            dst.Range(dst.Cells(ini + 1, 14), dst.Cells(r, 14)).NumberFormat = "0.000"
+        End If
+    End If
+    EscribirLineas = r + 1
+End Function
+
+' Totales de un grupo de filas de CUBICAR HOY
+Private Sub ResumenFilas(ws As Worksheet, filas As Collection, m3 As Double, pts As Long, destinos As String)
+    Dim i As Long, ciudad As String, p As Object
+    Set p = CreateObject("Scripting.Dictionary")
+    m3 = 0: destinos = ""
+    For i = 1 To filas.Count
+        m3 = m3 + Num(ws.Cells(filas(i), C_CUB).Value)
+        p(PuntoEntrega(ws, filas(i))) = True
+        ciudad = UCase(Trim(CStr(ws.Cells(filas(i), C_CIUDAD).Value)))
+        If InStr(1, " / " & destinos & " / ", " / " & ciudad & " / ") = 0 Then
+            destinos = destinos & IIf(Len(destinos) > 0, " / ", "") & ciudad
+        End If
+    Next i
+    pts = p.Count
+End Sub
+
+'==============================================================================
+' 3. CORREO A LA BODEGA (desde la hoja PREVIA BODEGA)
+'==============================================================================
+Public Sub EnviarCorteBodega()
+    Dim pb As Worksheet, r As Long, ultima As Long, ini As Long, fin As Long
+    On Error Resume Next
+    Set pb = ThisWorkbook.Worksheets(HOJA_PREV_BOD)
+    On Error GoTo 0
+    If pb Is Nothing Then MsgBox "Primero ejecute CubicarExportSAP (o ArmarVistaPrevia).", vbExclamation: Exit Sub
+
+    Dim carpeta As String, txt As Object, adj As Collection, vistas As Object, rem_ As String
+    Dim enviadas As Object: Set enviadas = CreateObject("Scripting.Dictionary")
+    Dim sinTxt As String, n As Long
+    carpeta = CarpetaTxt()
+    If Len(carpeta) > 0 Then Set txt = ArchivosTxtPorRemision(carpeta) Else Set txt = CreateObject("Scripting.Dictionary")
+
+    ultima = pb.Cells(pb.Rows.Count, 1).End(xlUp).Row
+    For r = 1 To ultima
+        If pb.Cells(r, 1).Value = "EMPRESA" Then
+            ini = r + 4: fin = ini
+            Do While Len(Trim(CStr(pb.Cells(fin + 1, 1).Value))) > 0 And pb.Cells(fin + 1, 1).Value <> "EMPRESA"
+                fin = fin + 1
+            Loop
+            If fin > ini Then
+                Set adj = New Collection
+                Set vistas = CreateObject("Scripting.Dictionary")
+                Dim i As Long
+                For i = ini + 1 To fin
+                    rem_ = Clave(pb.Cells(i, 3).Value)
+                    If Len(rem_) > 0 And Not vistas.Exists(rem_) Then
+                        vistas.Add rem_, True
+                        enviadas(rem_) = CStr(pb.Cells(r + 3, 2).Value)
+                        If txt.Exists(rem_) Then adj.Add txt(rem_) Else sinTxt = sinTxt & vbCrLf & rem_
+                    End If
+                Next i
+                CrearCorreo CStr(pb.Range("B2").Value), CStr(pb.Range("B3").Value), CStr(pb.Cells(r + 1, 2).Value), _
+                    "<p>Buen d&iacute;a</p><p>" & Html(CStr(pb.Cells(r + 2, 2).Value)) & "</p>" & _
+                    TablaHtmlRango(pb, ini, fin, 12), adj
+                n = n + 1
+            End If
+            r = fin
+        End If
+    Next r
+    If n = 0 Then MsgBox "No hay remisiones para enviar a bodega.", vbInformation: Exit Sub
+
+    If Len(sinTxt) > 0 Then MsgBox "Remisiones sin archivo TXT en la carpeta (adjuntar a mano):" & sinTxt, vbExclamation
+    If MsgBox("Se crearon " & n & " borrador(es) para bodega (" & enviadas.Count & " remisiones)." & vbCrLf & _
+              "Despues de enviarlos, registrarlas como enviadas a bodega?" & vbCrLf & _
+              "(Si responde No, volveran a salir en el proximo corte.)", vbYesNo + vbQuestion) = vbYes Then
+        RegistrarEnviadasBodega enviadas
+    End If
+End Sub
+
+'==============================================================================
+' 4. SOLICITUD DE VEHICULOS (desde la hoja PREVIA VEHICULOS)
+'==============================================================================
+Public Sub SolicitarVehiculo()
+    Dim pv As Worksheet, r As Long, ultima As Long, ini As Long, fin As Long, i As Long
+    On Error Resume Next
+    Set pv = ThisWorkbook.Worksheets(HOJA_PREV_VEH)
+    On Error GoTo 0
+    If pv Is Nothing Then MsgBox "Primero ejecute CubicarExportSAP (o ArmarVistaPrevia).", vbExclamation: Exit Sub
+    LeerVehiculos
+    Application.Calculate
+
+    Dim todas As Object: Set todas = CreateObject("Scripting.Dictionary")
+    Dim hechas As String, omitidas As String, k As Long, tipo As String
+    Dim unid As Double, kg As Double, m3 As Double, destinos As String, ciudad As String, rem_ As String
+    Dim puntos As Object, rems As Object, numVeh As String, docTransp As String, extra As String, cuerpo As String
+
+    ultima = pv.Cells(pv.Rows.Count, 1).End(xlUp).Row
+    For r = 1 To ultima
+        If pv.Cells(r, 1).Value = "VEHICULO No" Then
+            ini = r + 2: fin = ini
+            Do While Len(Trim(CStr(pv.Cells(fin + 1, 1).Value))) > 0 And pv.Cells(fin + 1, 1).Value <> "VEHICULO No"
+                fin = fin + 1
+            Loop
+            numVeh = CStr(pv.Cells(r, 2).Value)
+            If UCase(Trim(CStr(pv.Cells(r, 6).Value))) = "SI" And fin > ini Then
+                ' Tipo de vehiculo elegido
+                tipo = Trim(CStr(pv.Cells(r, 8).Value)): k = 0
+                For i = 1 To UBound(vehEtiqueta)
+                    If vehEtiqueta(i) = tipo Then k = i
+                Next i
+                ' Totales recalculados desde las lineas (por si se editaron)
+                Set puntos = CreateObject("Scripting.Dictionary"): Set rems = CreateObject("Scripting.Dictionary")
+                unid = 0: kg = 0: m3 = 0: destinos = ""
+                For i = ini + 1 To fin
+                    rem_ = Clave(pv.Cells(i, 3).Value)
+                    If Len(rem_) > 0 Then rems(rem_) = True
+                    unid = unid + Num(pv.Cells(i, 8).Value)
+                    kg = kg + Num(pv.Cells(i, 9).Value)
+                    m3 = m3 + Num(pv.Cells(i, 14).Value)
+                    ciudad = UCase(Trim(CStr(pv.Cells(i, 5).Value)))
+                    puntos(NormCiudad(ciudad) & "|" & NormCiudad(CStr(pv.Cells(i, 11).Value))) = True
+                    If InStr(1, " / " & destinos & " / ", " / " & ciudad & " / ") = 0 Then
+                        destinos = destinos & IIf(Len(destinos) > 0, " / ", "") & ciudad
+                    End If
+                Next i
+
+                If k = 0 Then
+                    omitidas = omitidas & vbCrLf & "Vehiculo " & numVeh & ": tipo '" & tipo & "' no valido"
+                ElseIf puntos.Count > MaxDescargues(vehNombre(k)) Then
+                    omitidas = omitidas & vbCrLf & "Vehiculo " & numVeh & ": " & puntos.Count & " descargues, " & _
+                               vehNombre(k) & " permite " & MaxDescargues(vehNombre(k))
+                Else
+                    docTransp = Trim(CStr(pv.Cells(r, 10).Value))
+                    extra = Trim(CStr(pv.Cells(r, 12).Value))
+                    cuerpo = "<p>Buen d&iacute;a</p>" & _
+                        IIf(Len(Trim(CStr(pv.Range("B4").Value))) > 0, "<p><b>NOTA: " & Html(CStr(pv.Range("B4").Value)) & "</b></p>", "") & _
+                        "<table style='font-family:Calibri;font-size:11pt'>" & _
+                        FilaDato("Tipo Veh&iacute;culo", Html(vehEtiqueta(k))) & _
+                        FilaDato("Destino", Html(destinos)) & _
+                        FilaDato("Doc. Transporte", Html(docTransp)) & _
+                        FilaDato("Observaciones:", "Unidades cargadas " & Format(unid, "#,##0") & " - Puntos de entrega " & puntos.Count) & _
+                        FilaDato("Nota:", "El veh&iacute;culo se encuentra " & Format(m3 / vehCap(k), "0%") & " de su capacidad " & Html(extra)) & _
+                        FilaDato("", "Despachar seg&uacute;n TXT al menos que tenga instrucci&oacute;n PESO " & Format(kg, "0")) & _
+                        "</table><br>" & TablaHtmlRango(pv, ini, fin, 13)
+                    CrearCorreo CStr(pv.Range("B2").Value), CStr(pv.Range("B3").Value), _
+                        "Solicitud Vehículo No " & numVeh & " Doc. Transporte " & docTransp & " " & Format(Date, "dd/mm/yyyy"), cuerpo, Nothing
+                    hechas = hechas & vbCrLf & "Vehiculo " & numVeh & ": " & pv.Cells(r, 4).Value & " (" & rems.Count & " remisiones)"
+                    Dim kk As Variant
+                    For Each kk In rems.Keys: todas(kk) = "Vehiculo " & numVeh & " - " & pv.Cells(r, 4).Value: Next kk
+                    pv.Cells(r, 6).Value = "PEDIDO"
+                End If
+            End If
+            r = fin
+        End If
+    Next r
+
+    If Len(omitidas) > 0 Then MsgBox "No se armaron estos vehiculos (corrija en " & HOJA_PREV_VEH & " y vuelva a ejecutar):" & omitidas, vbExclamation
+    If todas.Count = 0 Then
+        If Len(omitidas) = 0 Then MsgBox "No hay vehiculos con Pedir = SI.", vbInformation
+        Exit Sub
+    End If
     If MsgBox("Borradores creados:" & hechas & vbCrLf & vbCrLf & _
               "Despues de enviarlos, marcar estas " & todas.Count & " remisiones en CRUCE?", vbYesNo + vbQuestion) = vbYes Then
         MarcarEnCruceObs todas
     End If
 End Sub
 
-' Arma el borrador de una carga. Devuelve las remisiones incluidas, o Nothing si se omitio.
-Private Function SolicitudZona(ws As Worksheet, filas As Collection, zona As String, numVeh As Long, notaDespacho As String) As Object
-    Dim i As Long, unid As Double, kg As Double, m3 As Double, destinos As String, ciudad As String, pts As Long
-    Dim rems As Object: Set rems = CreateObject("Scripting.Dictionary")
-    Dim puntos As Object: Set puntos = CreateObject("Scripting.Dictionary")
-    For i = 1 To filas.Count
-        rems(Clave(ws.Cells(filas(i), C_REM).Value)) = True
-        puntos(PuntoEntrega(ws, filas(i))) = True
-        unid = unid + Num(ws.Cells(filas(i), C_CANT).Value)
-        kg = kg + Num(ws.Cells(filas(i), C_PESO).Value)
-        m3 = m3 + Num(ws.Cells(filas(i), C_CUB).Value)
-        ciudad = UCase(Trim(CStr(ws.Cells(filas(i), C_CIUDAD).Value)))
-        If InStr(1, " / " & destinos & " / ", " / " & ciudad & " / ") = 0 Then
-            destinos = destinos & IIf(Len(destinos) > 0, " / ", "") & ciudad
-        End If
-    Next i
-    pts = puntos.Count
-
-    Dim lista As String, k As Long, opc As String, aviso As String
-    For k = 1 To UBound(vehNombre)
-        lista = lista & k & " = " & vehEtiqueta(k) & "  ->  " & Format(m3 / vehCap(k), "0%") & _
-                "  (max " & MaxDescargues(vehNombre(k)) & " descargues)" & _
-                IIf(pts > MaxDescargues(vehNombre(k)), "  NO PERMITIDO", "") & vbCrLf
-    Next k
-    Do
-        opc = InputBox(aviso & "ZONA: " & zona & "   (vehiculo No " & numVeh & ")" & vbCrLf & _
-                       "Destinos: " & destinos & vbCrLf & _
-                       "Remisiones: " & rems.Count & "   Descargues: " & pts & "   Unidades: " & Format(unid, "#,##0") & _
-                       "   Peso: " & Format(kg, "#,##0") & " kg   Cubicaje: " & Format(m3, "0.00") & " m3" & vbCrLf & vbCrLf & _
-                       "Saturacion por vehiculo:" & vbCrLf & lista & vbCrLf & _
-                       "Numero del tipo de vehiculo (0 = no pedir este vehiculo hoy):", "Vehiculo", _
-                       CStr(IndiceSugerido(m3, pts)))
-        If Not IsNumeric(opc) Then Exit Function
-        k = CLng(opc): If k < 1 Or k > UBound(vehNombre) Then Exit Function
-        If pts <= MaxDescargues(vehNombre(k)) Then Exit Do
-        aviso = ">> " & vehNombre(k) & " permite maximo " & MaxDescargues(vehNombre(k)) & " descargues y esta carga tiene " & pts & "." & vbCrLf & vbCrLf
-    Loop
-
-    Dim docTransp As String, extra As String
-    docTransp = InputBox("Zona " & zona & " - Doc. Transporte:", "Doc. Transporte", Clave(ws.Cells(filas(1), C_REM).Value))
-    If Len(docTransp) = 0 Then Exit Function
-    extra = InputBox("Zona " & zona & " - texto adicional para la nota (opcional, ej. '1 CLIENTE'):", "Nota", "")
-
-    Dim cuerpo As String
-    cuerpo = "<p>Buen d&iacute;a</p>" & _
-        IIf(Len(notaDespacho) > 0, "<p><b>NOTA: " & Html(notaDespacho) & "</b></p>", "") & _
-        "<table style='font-family:Calibri;font-size:11pt'>" & _
-        FilaDato("Tipo Veh&iacute;culo", Html(vehEtiqueta(k))) & _
-        FilaDato("Destino", Html(destinos)) & _
-        FilaDato("Doc. Transporte", Html(docTransp)) & _
-        FilaDato("Observaciones:", "Unidades cargadas " & Format(unid, "#,##0") & " - Puntos de entrega " & pts) & _
-        FilaDato("Nota:", "El veh&iacute;culo se encuentra " & Format(m3 / vehCap(k), "0%") & " de su capacidad " & Html(extra)) & _
-        FilaDato("", "Despachar seg&uacute;n TXT al menos que tenga instrucci&oacute;n PESO " & Format(kg, "0")) & _
-        "</table><br>" & TablaHtml(ws, filas, True)
-
-    CrearCorreo PARA_TRANSPORTE, CC_TRANSPORTE, _
-        "Solicitud Vehículo No " & numVeh & " Doc. Transporte " & docTransp & " " & Format(Date, "dd/mm/yyyy"), cuerpo, Nothing
-    Set SolicitudZona = rems
-End Function
-
-' Maximo de puntos de entrega (descargues) por tipo de vehiculo
 Private Function MaxDescargues(nombre As String) As Long
     Select Case UCase(Trim(nombre))
         Case "TURBO": MaxDescargues = 13
@@ -737,24 +944,26 @@ Private Sub MarcarEnCruceObs(rems As Object)
     MsgBox n & " remisiones agregadas a CRUCE.", vbInformation
 End Sub
 
-Private Sub RegistrarEnviadasBodega(ws As Worksheet, porEmpresa As Object)
-    Dim h As Worksheet, fila As Long, k As Variant, i As Long, r As String, vistas As Object
+' enviadas: remision -> texto del corte
+Private Sub RegistrarEnviadasBodega(enviadas As Object)
+    Dim h As Worksheet, fila As Long, k As Variant, ws As Worksheet, i As Long, ultima As Long
     Set h = HojaHistorial()
-    Set vistas = CreateObject("Scripting.Dictionary")
     fila = h.Cells(h.Rows.Count, 1).End(xlUp).Row + 1
-    For Each k In porEmpresa.Keys
-        For i = 1 To porEmpresa(k).Count
-            r = Clave(ws.Cells(porEmpresa(k)(i), C_REM).Value)
-            If Not vistas.Exists(r) Then
-                vistas.Add r, True
-                h.Cells(fila, 1).Value = CDbl(r)
-                h.Cells(fila, 2).Value = ws.Cells(porEmpresa(k)(i), C_CORTE).Value
-                h.Cells(fila, 3).Value = Now
-                fila = fila + 1
-            End If
-            ws.Cells(porEmpresa(k)(i), C_NUEVO).Value = "NO"
-        Next i
+    For Each k In enviadas.Keys
+        h.Cells(fila, 1).Value = CDbl(k)
+        h.Cells(fila, 2).Value = enviadas(k)
+        h.Cells(fila, 3).Value = Now
+        fila = fila + 1
     Next k
+    ' Marcar en CUBICAR HOY para que no vuelvan a salir en este mismo dia
+    Set ws = HojaDetalle()
+    If Not ws Is Nothing Then
+        ultima = ws.Cells(ws.Rows.Count, C_REM).End(xlUp).Row
+        For i = 2 To ultima
+            If enviadas.Exists(Clave(ws.Cells(i, C_REM).Value)) Then ws.Cells(i, C_NUEVO).Value = "NO"
+        Next i
+    End If
+    MsgBox enviadas.Count & " remisiones registradas en " & HOJA_HIST & ".", vbInformation
 End Sub
 
 '==============================================================================
@@ -780,41 +989,24 @@ Private Sub CrearCorreo(para As String, cc As String, asunto As String, cuerpoHt
     End If
 End Sub
 
-' Tabla del correo con las mismas columnas que se envian hoy
-Private Function TablaHtml(ws As Worksheet, filas As Collection, conValor As Boolean) As String
-    Dim cols As Variant, titulos As Variant, h As String, i As Long, j As Long, v As Variant, txt As String
-    If conValor Then
-        cols = Array(C_FECHA, C_CENTRO, C_REM, C_CLIENTE, C_CIUDAD, C_COD, C_DESC, C_CANT, C_PESO, C_CODSAP, C_DIR, C_EMP, C_VALOR)
-        titulos = Array("Fecha Remisi&oacute;n", "CENTRO", "Remisi&oacute;n", "Cliente", "Ciudad", "C&oacute;digo", "Descripci&oacute;n", _
-                        "Cantidad", "Peso", "Codigo SAP", "Direcci&oacute;n", "EMPRESA", "VALOR TOTAL SIN IVA")
-    Else
-        cols = Array(C_FECHA, C_CENTRO, C_REM, C_CLIENTE, C_CIUDAD, C_COD, C_DESC, C_CANT, C_PESO, C_CODSAP, C_DIR, C_EMP)
-        titulos = Array("Fecha Remisi&oacute;n", "CENTRO", "Remisi&oacute;n", "Cliente", "Ciudad", "C&oacute;digo", "Descripci&oacute;n", _
-                        "Cantidad", "Peso", "Codigo SAP", "Direcci&oacute;n", "EMPRESA")
-    End If
-    Dim orden As Collection: Set orden = OrdenAgrupado(ws, filas)
+' Tabla HTML del correo a partir de la vista previa: encabezado en la fila ini,
+' lineas de ini+1 a fin, columnas 1..nCols; usa el texto tal como se ve en Excel.
+Private Function TablaHtmlRango(sh As Worksheet, ini As Long, fin As Long, nCols As Long) As String
+    Dim h As String, r As Long, c As Long, alin As String
     h = "<table border='1' cellspacing='0' cellpadding='3' style='border-collapse:collapse;font-family:Calibri;font-size:10pt'><tr>"
-    For j = 0 To UBound(titulos)
-        h = h & "<th style='background:#FFFF00'>" & titulos(j) & "</th>"
-    Next j
+    For c = 1 To nCols
+        h = h & "<th style='background:#FFFF00'>" & Html(CStr(sh.Cells(ini, c).Value)) & "</th>"
+    Next c
     h = h & "</tr>"
-    For i = 1 To orden.Count
+    For r = ini + 1 To fin
         h = h & "<tr>"
-        For j = 0 To UBound(cols)
-            v = ws.Cells(orden(i), cols(j)).Value
-            Select Case cols(j)
-                Case C_FECHA: If IsDate(v) Then txt = Format(v, "d/mm/yyyy") Else txt = CStr(v)
-                Case C_REM, C_COD, C_CODSAP: txt = Clave(v)
-                Case C_CANT: txt = Format(Num(v), "#,##0")
-                Case C_PESO: txt = Format(Num(v), "#,##0.000")
-                Case C_VALOR: txt = "$ " & Format(Num(v), "#,##0.00")
-                Case Else: txt = Html(CStr(v))
-            End Select
-            h = h & "<td" & IIf(cols(j) = C_CANT Or cols(j) = C_PESO Or cols(j) = C_VALOR, " align='right'", "") & ">" & txt & "</td>"
-        Next j
+        For c = 1 To nCols
+            alin = IIf(c = 8 Or c = 9 Or c = 13, " align='right'", "")
+            h = h & "<td" & alin & ">" & Html(sh.Cells(r, c).Text) & "</td>"
+        Next c
         h = h & "</tr>"
-    Next i
-    TablaHtml = h & "</table>"
+    Next r
+    TablaHtmlRango = h & "</table>"
 End Function
 
 ' Agrupa las filas por Codigo SAP (o por direccion si no hay codigo), en el orden
