@@ -13,7 +13,7 @@
 ## Uso diario
 | Paso | Macro | Qué hace |
 |---|---|---|
-| 1 | `CubicarExportSAP` | Pide el export de SAP y el texto del corte (ej. `1 Corte Octubre 14`). Toma las entregas que no están en `CRUCE` y crea `CUBICAR HOY`, `RESUMEN TRANSPORTE` y `ALERTAS`. La columna **Nuevo en corte** indica qué remisiones aún no se han enviado a bodega. |
+| 1 | `CubicarExportSAP` | Pide el export de SAP y el texto del corte (ej. `1 Corte Octubre 14`). Luego pide dos filtros: **desde qué fecha** tomar las remisiones pendientes para vehículo (vacío = todas) y **qué remisiones van a bodega**: 1 = por fecha de remisión (desde/hasta, por defecto hoy), 2 = posteriores a la última remisión registrada (la sugiere), 3 = sin filtro. Las nuevas que no pasan el filtro quedan como `NO - fuera de filtro`. Toma las entregas que no están en `CRUCE` y crea `CUBICAR HOY`, `RESUMEN TRANSPORTE` y `ALERTAS`. La columna **Nuevo en corte** indica qué remisiones aún no se han enviado a bodega. |
 | 2 | `EnviarCorteBodega` | Borrador "PRIMER PIRELLI OCTUBRE 14" con las remisiones nuevas (tabla sin valor) y sus TXT adjuntos. Avisa qué remisiones no tienen TXT. Al final pregunta si se registran como enviadas (hoja `HISTORIAL BODEGA`). |
 | 3 | `SolicitarVehiculo` | Se ejecuta una vez y arma **una solicitud de vehículo por zona** (si la zona no cabe en un vehículo por m³ o por máximo de descargues, la divide en la menor cantidad de vehículos) con las filas visibles de `CUBICAR HOY`. Por cada zona muestra la saturación de cada tipo de vehículo y pide el tipo (0 = no pedir hoy), el Doc. Transporte y la nota; numera los vehículos en orden. Al final pregunta si marca las remisiones en `CRUCE`. |
 
@@ -26,6 +26,7 @@ Ningún correo se envía solo: todos quedan como borrador en Outlook, con la fir
 - **Máximo de descargues** (puntos de entrega = direcciones distintas, columna Dirección): TURBO 13, SENCILLO 10, PATINETA 1, TRACTOMULA 1. Se cambia en la función `MaxDescargues`.
 - **Regla de rutas**: si hay carga para Cúcuta, Cúcuta y Bucaramanga van solas en su(s) vehículo(s), sin Bogotá ni otras ciudades. Sin carga para Cúcuta, Bucaramanga se puede unir con Bogotá.
 - **Saturación** = m³ ÷ m³ máximo de `CUBICAJE BODEGA!C3:C6` (ej. Sencillo 36). El nombre del vehículo en el correo usa la etiqueta de la columna A (ej. "SENCILLO 42").
+- **Tablas de los correos**: las líneas salen agrupadas por Código SAP (o por Dirección si no hay código), en el orden en que aparece cada cliente y, dentro de cada uno, por número de remisión.
 - **Peso** del correo = suma de pesos; **Destino** = ciudades distintas en el orden de las filas; **Doc. Transporte** sugerido = primera remisión visible (se puede cambiar).
 - Los TXT se reconocen por el texto `Remisión: 29150…` dentro del archivo; si hay varios para la misma remisión se adjunta el más reciente.
 - Si hay remisiones de PIRELLI y PROMETEON en el mismo corte, se crea un correo de bodega por empresa.

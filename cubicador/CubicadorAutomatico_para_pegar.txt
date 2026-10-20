@@ -4,6 +4,9 @@
 ' Flujo diario:
 '   1. CubicarExportSAP    -> lee el export de SAP, toma las entregas que NO
 '                             estan en CRUCE, calcula cubicaje, valor y zona.
+'                             Pregunta dos filtros: desde que fecha tomar las
+'                             pendientes para vehiculo, y que remisiones van a
+'                             bodega (por fecha o despues de la ultima registrada).
 '                             Crea CUBICAR HOY, RESUMEN TRANSPORTE y ALERTAS.
 '   2. EnviarCorteBodega   -> borrador del correo a la bodega ("PRIMER PIRELLI
 '                             OCTUBRE 14") con las remisiones nuevas del corte y
@@ -76,6 +79,49 @@ Public Sub CubicarExportSAP()
     corte = InputBox("Texto de la Fecha Corte:", "Fecha de corte", "1 Corte " & MesEnEspanol(Date) & " " & Format(Date, "dd"))
     If Len(Trim(corte)) = 0 Then Exit Sub
 
+    Dim dHist As Object: Set dHist = Diccionario(HojaHistorial(), 1, 2, 2)
+
+    ' Filtro 1: desde que fecha se consideran las remisiones pendientes para vehiculo
+    Dim txt As String, desdeVeh As Date, hayDesdeVeh As Boolean
+    txt = InputBox("PENDIENTES PARA VEHICULO" & vbCrLf & _
+                   "Tomar remisiones con fecha de remision desde (dd/mm/aaaa)." & vbCrLf & _
+                   "Deje vacio para tomar todas las pendientes (no estan en CRUCE):", "Filtro vehiculos", "")
+    If Len(Trim(txt)) > 0 Then
+        If Not IsDate(txt) Then MsgBox "Fecha no valida: " & txt, vbExclamation: Exit Sub
+        desdeVeh = CDate(txt): hayDesdeVeh = True
+    End If
+
+    ' Filtro 2: que remisiones nuevas van al correo de bodega
+    Dim modoBod As String, bodDesde As Date, bodHasta As Date, bodUltRem As Double, kh As Variant, txtFiltro As String
+    For Each kh In dHist.Keys
+        If IsNumeric(kh) Then
+            If CDbl(kh) > bodUltRem Then bodUltRem = CDbl(kh)
+        End If
+    Next kh
+    modoBod = InputBox("CORREO A BODEGA - que remisiones nuevas incluir:" & vbCrLf & vbCrLf & _
+                       "1 = por fecha de remision (desde / hasta)" & vbCrLf & _
+                       "2 = posteriores a la ultima remision registrada (" & Format(bodUltRem, "0") & ")" & vbCrLf & _
+                       "3 = sin filtro", "Filtro bodega", "1")
+    Select Case Trim(modoBod)
+        Case "1"
+            txt = InputBox("Fecha de remision DESDE (dd/mm/aaaa):", "Filtro bodega", Format(Date, "dd/mm/yyyy"))
+            If Not IsDate(txt) Then Exit Sub
+            bodDesde = CDate(txt)
+            txt = InputBox("Fecha de remision HASTA (dd/mm/aaaa):", "Filtro bodega", Format(Date, "dd/mm/yyyy"))
+            If Not IsDate(txt) Then Exit Sub
+            bodHasta = CDate(txt)
+            txtFiltro = "fecha de remision del " & Format(bodDesde, "dd/mm/yyyy") & " al " & Format(bodHasta, "dd/mm/yyyy")
+        Case "2"
+            txt = InputBox("Incluir remisiones con numero MAYOR a:", "Filtro bodega", Format(bodUltRem, "0"))
+            If Not IsNumeric(txt) Then Exit Sub
+            bodUltRem = CDbl(txt)
+            txtFiltro = "remisiones mayores a " & Format(bodUltRem, "0")
+        Case "3"
+            txtFiltro = "sin filtro"
+        Case Else
+            Exit Sub
+    End Select
+
     Application.ScreenUpdating = False
     Application.Calculation = xlCalculationManual
     On Error GoTo Fallo
@@ -85,7 +131,6 @@ Public Sub CubicarExportSAP()
     Set dVal = Diccionario(ThisWorkbook.Worksheets("VALO MATERIAL"), 3, 4, 4)
     Set dZona = DiccionarioCiudades(ThisWorkbook.Worksheets("llanta_zona"), 10, 11, 2)
     Set dCruce = Diccionario(ThisWorkbook.Worksheets("CRUCE"), 1, 1, 2)
-    Dim dHist As Object: Set dHist = Diccionario(HojaHistorial(), 1, 2, 2)
     Set alertas = New Collection
 
     Set wbSAP = Workbooks.Open(archivo, ReadOnly:=True)
@@ -106,6 +151,9 @@ Public Sub CubicarExportSAP()
     ReDim out(1 To UBound(datos, 1), 1 To NC)
     Dim yaCruce As Long, nuevas As Object: Set nuevas = CreateObject("Scripting.Dictionary")
     Dim yaContada As Object: Set yaContada = CreateObject("Scripting.Dictionary")
+    Dim fueraVeh As Object: Set fueraVeh = CreateObject("Scripting.Dictionary")
+    Dim paraBodega As Object: Set paraBodega = CreateObject("Scripting.Dictionary")
+    Dim pasa As Boolean
 
     For i = 2 To UBound(datos, 1)
         Dim rem_ As String, cant As Double, mat As String, ciudad As String, zona As String
@@ -114,6 +162,8 @@ Public Sub CubicarExportSAP()
         If Len(rem_) > 0 And cant > 0 Then
             If dCruce.Exists(rem_) Then
                 If Not yaContada.Exists(rem_) Then yaContada.Add rem_, True: yaCruce = yaCruce + 1
+            ElseIf hayDesdeVeh And FechaAntes(datos(i, cFecha), desdeVeh) Then
+                fueraVeh(rem_) = True
             Else
                 n = n + 1
                 nuevas(rem_) = True
@@ -146,7 +196,17 @@ Public Sub CubicarExportSAP()
                 out(n, 15) = out(n, 14) * cant
                 out(n, 16) = IIf(Left(rem_, 2) = "29", "PIRELLI TYRE", "PROMETEON")
                 out(n, 17) = IIf(dVal.Exists(mat), Num(dVal(mat)), 0) * cant
-                out(n, 18) = IIf(dHist.Exists(rem_), "NO", "SI")
+                If dHist.Exists(rem_) Then
+                    out(n, 18) = "NO"
+                Else
+                    Select Case Trim(modoBod)
+                        Case "1": pasa = Not FechaAntes(datos(i, cFecha), bodDesde) And Not FechaDespues(datos(i, cFecha), bodHasta) And IsDate(datos(i, cFecha))
+                        Case "2": pasa = (CDbl(rem_) > bodUltRem)
+                        Case Else: pasa = True
+                    End Select
+                    out(n, 18) = IIf(pasa, "SI", "NO - fuera de filtro")
+                    If pasa Then paraBodega(rem_) = True
+                End If
             End If
         End If
     Next i
@@ -154,7 +214,8 @@ Public Sub CubicarExportSAP()
     If n = 0 Then
         Application.Calculation = xlCalculationAutomatic
         Application.ScreenUpdating = True
-        MsgBox "No hay remisiones nuevas: todas las entregas del export ya estan en CRUCE (" & yaCruce & ").", vbInformation
+        MsgBox "No hay remisiones para cubicar." & vbCrLf & "Ya en CRUCE: " & yaCruce & vbCrLf & _
+               "Fuera del filtro de fecha para vehiculo: " & fueraVeh.Count, vbInformation
         Exit Sub
     End If
 
@@ -188,8 +249,10 @@ Public Sub CubicarExportSAP()
     Application.ScreenUpdating = True
     ThisWorkbook.Worksheets(HOJA_RESUMEN).Activate
 
-    MsgBox "Remisiones nuevas: " & nuevas.Count & " (" & n & " lineas)" & vbCrLf & _
+    MsgBox "Remisiones pendientes para vehiculo: " & nuevas.Count & " (" & n & " lineas)" & vbCrLf & _
            "Ya cubicadas antes (en CRUCE): " & yaCruce & vbCrLf & _
+           "Fuera del filtro de fecha para vehiculo: " & fueraVeh.Count & vbCrLf & _
+           "Nuevas para el correo a bodega: " & paraBodega.Count & " (" & txtFiltro & ")" & vbCrLf & _
            "Alertas: " & alertas.Count & IIf(alertas.Count > 0, "  -> revise la hoja " & HOJA_ALERTAS, ""), _
            IIf(alertas.Count > 0, vbExclamation, vbInformation), "Cubicaje listo"
     Exit Sub
@@ -729,15 +792,16 @@ Private Function TablaHtml(ws As Worksheet, filas As Collection, conValor As Boo
         titulos = Array("Fecha Remisi&oacute;n", "CENTRO", "Remisi&oacute;n", "Cliente", "Ciudad", "C&oacute;digo", "Descripci&oacute;n", _
                         "Cantidad", "Peso", "Codigo SAP", "Direcci&oacute;n", "EMPRESA")
     End If
+    Dim orden As Collection: Set orden = OrdenAgrupado(ws, filas)
     h = "<table border='1' cellspacing='0' cellpadding='3' style='border-collapse:collapse;font-family:Calibri;font-size:10pt'><tr>"
     For j = 0 To UBound(titulos)
         h = h & "<th style='background:#FFFF00'>" & titulos(j) & "</th>"
     Next j
     h = h & "</tr>"
-    For i = 1 To filas.Count
+    For i = 1 To orden.Count
         h = h & "<tr>"
         For j = 0 To UBound(cols)
-            v = ws.Cells(filas(i), cols(j)).Value
+            v = ws.Cells(orden(i), cols(j)).Value
             Select Case cols(j)
                 Case C_FECHA: If IsDate(v) Then txt = Format(v, "d/mm/yyyy") Else txt = CStr(v)
                 Case C_REM, C_COD, C_CODSAP: txt = Clave(v)
@@ -751,6 +815,45 @@ Private Function TablaHtml(ws As Worksheet, filas As Collection, conValor As Boo
         h = h & "</tr>"
     Next i
     TablaHtml = h & "</table>"
+End Function
+
+' Agrupa las filas por Codigo SAP (o por direccion si no hay codigo), en el orden
+' en que aparece cada cliente; dentro de cada grupo, por numero de remision.
+Private Function OrdenAgrupado(ws As Worksheet, filas As Collection) As Collection
+    Dim grupos As Object, i As Long, g As String, k As Variant, res As New Collection
+    Dim a As Long, b As Long, n As Long, t As Variant, arr() As Variant
+    Set grupos = CreateObject("Scripting.Dictionary")
+    For i = 1 To filas.Count
+        g = Clave(ws.Cells(filas(i), C_CODSAP).Value)
+        If Len(g) = 0 Then g = "DIR|" & NormCiudad(CStr(ws.Cells(filas(i), C_DIR).Value))
+        If Not grupos.Exists(g) Then grupos.Add g, New Collection
+        grupos(g).Add filas(i)
+    Next i
+    For Each k In grupos.Keys
+        n = grupos(k).Count
+        ReDim arr(1 To n)
+        For a = 1 To n: arr(a) = grupos(k)(a): Next a
+        For a = 2 To n
+            t = arr(a): b = a - 1
+            Do While b >= 1
+                If Num(ws.Cells(arr(b), C_REM).Value) <= Num(ws.Cells(t, C_REM).Value) Then Exit Do
+                arr(b + 1) = arr(b): b = b - 1
+            Loop
+            arr(b + 1) = t
+        Next a
+        For a = 1 To n: res.Add arr(a): Next a
+    Next k
+    Set OrdenAgrupado = res
+End Function
+
+' True si v es una fecha anterior a d
+Private Function FechaAntes(v As Variant, d As Date) As Boolean
+    If IsDate(v) Then FechaAntes = (Int(CDate(v)) < Int(d))
+End Function
+
+' True si v es una fecha posterior a d
+Private Function FechaDespues(v As Variant, d As Date) As Boolean
+    If IsDate(v) Then FechaDespues = (Int(CDate(v)) > Int(d))
 End Function
 
 Private Function FilaDato(etiqueta As String, valor As String) As String
