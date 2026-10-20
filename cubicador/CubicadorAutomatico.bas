@@ -11,7 +11,9 @@ Attribute VB_Name = "CubicadorAutomatico"
 '                             sus archivos TXT adjuntos.
 '   3. SolicitarVehiculo   -> arma solicitudes de vehiculo POR ZONA; si una zona
 '                             supera m3 o el maximo de descargues (TURBO 13,
-'                             SENCILLO 10, PATINETA/TRACTOMULA 1) la divide
+'                             SENCILLO 10, PATINETA/TRACTOMULA 1) la divide.
+'                             Si hay carga para Cucuta, Cucuta + Bucaramanga
+'                             van solas (sin Bogota ni otras ciudades).
 '                             ("Solicitud Vehiculo No X Doc. Transporte ...")
 '                             con las filas visibles de CUBICAR HOY, y ofrece
 '                             marcar las remisiones en CRUCE.
@@ -387,7 +389,7 @@ Public Sub SolicitarVehiculo()
     Set cargas = CreateObject("Scripting.Dictionary")
     zonas = Ordenadas(porZona)
     For Each z In zonas
-        cargas.Add z, ArmarCargas(ws, porZona(z))
+        cargas.Add z, CargasZona(ws, porZona(z))
         totalCargas = totalCargas + cargas(z).Count
         plan = plan & vbCrLf & z & ": " & cargas(z).Count & " vehiculo(s)"
     Next z
@@ -509,6 +511,28 @@ Private Function Factible(m3 As Double, pts As Long) As Boolean
     For k = 1 To UBound(vehNombre)
         If m3 <= vehCap(k) * TOPE_SATURACION And pts <= MaxDescargues(vehNombre(k)) Then Factible = True: Exit Function
     Next k
+End Function
+
+' Regla de rutas: si la zona tiene carga para CUCUTA, Cucuta y Bucaramanga van
+' juntas en vehiculo(s) propio(s), sin otras ciudades. Si no hay carga para
+' Cucuta, Bucaramanga se puede unir con Bogota y el resto de la zona.
+Private Function CargasZona(ws As Worksheet, filas As Collection) As Collection
+    Dim i As Long, ciudad As String, hayCucuta As Boolean
+    For i = 1 To filas.Count
+        If InStr(NormCiudad(CStr(ws.Cells(filas(i), C_CIUDAD).Value)), "CUCUTA") > 0 Then hayCucuta = True: Exit For
+    Next i
+    If Not hayCucuta Then Set CargasZona = ArmarCargas(ws, filas): Exit Function
+
+    Dim ruta As New Collection, resto As New Collection, res As New Collection, c As Variant
+    For i = 1 To filas.Count
+        ciudad = NormCiudad(CStr(ws.Cells(filas(i), C_CIUDAD).Value))
+        If InStr(ciudad, "CUCUTA") > 0 Or InStr(ciudad, "BUCARAMANGA") > 0 Then ruta.Add filas(i) Else resto.Add filas(i)
+    Next i
+    For Each c In ArmarCargas(ws, ruta): res.Add c: Next c
+    If resto.Count > 0 Then
+        For Each c In ArmarCargas(ws, resto): res.Add c: Next c
+    End If
+    Set CargasZona = res
 End Function
 
 ' Divide las filas de una zona en la menor cantidad de cargas posible. Un punto de

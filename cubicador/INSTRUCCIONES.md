@@ -24,6 +24,7 @@ Ningún correo se envía solo: todos quedan como borrador en Outlook, con la fir
 - **Remisiones nuevas para bodega** = pendientes que no están en `HISTORIAL BODEGA`. La primera vez, el historial se llena con las remisiones que ya están en `CUBICAJE BODEGA`.
 - **Cubicaje** = m³/und de `MATERIAL` × cantidad. **Valor** = `VALO MATERIAL` × cantidad. **Zona** = ciudad en `llanta_zona`.
 - **Máximo de descargues** (puntos de entrega = direcciones distintas, columna Dirección): TURBO 13, SENCILLO 10, PATINETA 1, TRACTOMULA 1. Se cambia en la función `MaxDescargues`.
+- **Regla de rutas**: si hay carga para Cúcuta, Cúcuta y Bucaramanga van solas en su(s) vehículo(s), sin Bogotá ni otras ciudades. Sin carga para Cúcuta, Bucaramanga se puede unir con Bogotá.
 - **Saturación** = m³ ÷ m³ máximo de `CUBICAJE BODEGA!C3:C6` (ej. Sencillo 36). El nombre del vehículo en el correo usa la etiqueta de la columna A (ej. "SENCILLO 42").
 - **Peso** del correo = suma de pesos; **Destino** = ciudades distintas en el orden de las filas; **Doc. Transporte** sugerido = primera remisión visible (se puede cambiar).
 - Los TXT se reconocen por el texto `Remisión: 29150…` dentro del archivo; si hay varios para la misma remisión se adjunta el más reciente.
