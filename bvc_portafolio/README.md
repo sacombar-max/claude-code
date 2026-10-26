@@ -20,6 +20,8 @@ python analizador.py --solo-manual      # sin internet: solo precios_manuales.cs
 |---|---|---|---|
 | PFBCOLOM | 100 | 32000 | |
 
+Guarda tus posiciones reales en `mi_portafolio.csv` (mismo formato): git lo ignora y el programa lo usa automáticamente si existe.
+
 Si `yahoo` está vacío se usa `SIMBOLO.CL`. Si Yahoo no reconoce un ticker, escribe aquí el símbolo correcto.
 
 `precios_manuales.csv`: precios que digitas tú (p. ej. copiados de bvc.com.co). Cuando existen, prevalecen sobre Yahoo

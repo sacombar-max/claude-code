@@ -32,10 +32,23 @@ DIR_BASE = os.path.dirname(os.path.abspath(__file__))
 # ──────────────────────────────────────────────
 # Lectura de archivos
 # ──────────────────────────────────────────────
+# Encabezados alternativos aceptados (p. ej. copiados de una hoja de Excel).
+ALIAS_COLUMNAS = {
+    "tickers": "simbolo", "ticker": "simbolo", "símbolo": "simbolo",
+    "qta acciones": "cantidad", "acciones": "cantidad",
+    "precio de compra": "costo_promedio",
+}
+
+
 def leer_portafolio(ruta):
     posiciones = []
-    with open(ruta, newline="", encoding="utf-8") as f:
-        for fila in csv.DictReader(f):
+    with open(ruta, newline="", encoding="utf-8-sig") as f:
+        muestra = f.read(2048)
+        f.seek(0)
+        dialecto = csv.Sniffer().sniff(muestra, delimiters=",;\t")
+        for fila in csv.DictReader(f, dialect=dialecto):
+            fila = {ALIAS_COLUMNAS.get(k.strip().lower(), k.strip().lower()): v
+                    for k, v in fila.items() if k}
             simbolo = (fila.get("simbolo") or "").strip().upper()
             if not simbolo:
                 continue
@@ -373,7 +386,10 @@ y en los estados financieros publicados por cada emisor. Esto no es una recomend
 
 def main():
     ap = argparse.ArgumentParser(description="Analizador de portafolio BVC")
-    ap.add_argument("-p", "--portafolio", default=os.path.join(DIR_BASE, "portafolio.csv"))
+    # mi_portafolio.csv (ignorado por git, datos privados) tiene prioridad sobre el ejemplo.
+    privado = os.path.join(DIR_BASE, "mi_portafolio.csv")
+    por_defecto = privado if os.path.exists(privado) else os.path.join(DIR_BASE, "portafolio.csv")
+    ap.add_argument("-p", "--portafolio", default=por_defecto)
     ap.add_argument("-m", "--manuales", default=os.path.join(DIR_BASE, "precios_manuales.csv"))
     ap.add_argument("-o", "--salida", default=os.path.join(DIR_BASE, "reportes"))
     ap.add_argument("--solo-manual", action="store_true", help="no consultar Yahoo Finance")
